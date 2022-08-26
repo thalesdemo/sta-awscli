@@ -14,7 +14,7 @@ if "-" in sta_awscli_version:
     # so change it to: "1.3.3+22.git.gdf81228"
     # See: https://peps.python.org/pep-0440/#local-version-segments
     v,i,s = sta_awscli_version.split("-")
-    sta_awscli_version = v + "+" + i + ".git." + s
+    sta_awscli_version = "v2.0.0"
 
 assert "-" not in sta_awscli_version
 assert "." in sta_awscli_version
