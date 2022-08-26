@@ -179,8 +179,6 @@ else:
 print("KeyCloak AWS application URL: " + idpentryurl)
 sas_user = None
 
-# https://idp.eu.safenetid.com/auth/realms/E6MQD34PJN-STA/protocol/saml/clients/Amazon%20Web%20Services
-# https://idp.eu.safenetid.com/auth/realms/E6MQD34PJN-STA/protocol/saml/clients/Amazon%20Web%20Services?sas_user=jonas
 
 ##########################################################################
 # Debugging if you are having any major issues:
@@ -407,7 +405,7 @@ for awsrole in awsroles:
 # otherwise just proceed
 print("")
 if len(awsroles) > 1:
-    print(awsroles)
+    #print(awsroles) For debug purposes
     i = 0
     print("Please choose the role you would like to assume:")
     for awsrole in awsroles:
