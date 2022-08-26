@@ -19,14 +19,14 @@ On first execution, the script will collect the required information to create a
 - AWS application name in Keycloak
 
 For example:
-
+```
 [config]
 aws_region =  
 cloud_idp =  
 is_new_kc =  
 tenant_reference_id =  
 aws_app_name =  
-
+```
 ## Usage
 
 Once the configuration is created, a connection is established to STA through Keycloak and the user will be asked to provide a username, based on STA authentication policy, AD Password and OTP. If the user only has single token (MobilePASS+ or GriDsure) assigned, the authentication will be triggered automatically (Push for MobilePASS+ or the pattern grid presented for GriDsure). For auto triggered Push - the user can cancel the Push using CTRL+C to manually enter OTP.
