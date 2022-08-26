@@ -36,7 +36,7 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/thalesdemo/sta-awscli",
     packages=setuptools.find_packages(),
-    package_data={"sta-awscli": ["VERSION"]},
+    package_data={"sta-awscli"},
     include_package_data=True,
     classifiers=[
         "Programming Language :: Python :: 3",
