@@ -29,7 +29,6 @@
 import sys
 import boto3
 import requests
-import getpass
 import configparser
 import base64
 import xml.etree.ElementTree as ET
@@ -40,7 +39,7 @@ import os.path
 from dateutil import tz
 import validators
 import pwinput
-
+import numpy
 
 ##########################################################################
 # AWS variables
@@ -66,7 +65,7 @@ class ConfigFile:
 
 
 CONF_SECTION = 'config'
-cli_config_file_path = 'kc-sta-awscli.conf'
+cli_config_file_path = 'sta-awscli.conf'
 
 config = configparser.ConfigParser()
 
@@ -129,7 +128,7 @@ else:
     with open(cli_config_file_path, 'w') as configfile:
         config.write(configfile)
 
-    print(f"{BColors.OKGREEN}Config file created in: {BColors.ENDC}" + absolute_path)
+    print(f"{BColors.OKGREEN}Config file created in: {BColors.ENDC}" + os.path.abspath(cli_config_file_path))
 
 
 # region: The default AWS region that this script will connect
@@ -179,8 +178,6 @@ else:
 print("KeyCloak AWS application URL: " + idpentryurl)
 sas_user = None
 
-# https://idp.eu.safenetid.com/auth/realms/E6MQD34PJN-STA/protocol/saml/clients/Amazon%20Web%20Services
-# https://idp.eu.safenetid.com/auth/realms/E6MQD34PJN-STA/protocol/saml/clients/Amazon%20Web%20Services?sas_user=jonas
 
 ##########################################################################
 # Debugging if you are having any major issues:
@@ -210,12 +207,12 @@ response = session.get(idpentryurl, verify=sslverification)
 idpauthformsubmiturl = response.url
 assertion = ''
 
+
 # removes the table borders
 def transform_image(b64img):
     import cv2
-    import numpy as np
 
-    nparr = np.frombuffer(b64img, np.uint8)
+    nparr = numpy.frombuffer(b64img, numpy.uint8)
     image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
     result = image.copy()
@@ -241,16 +238,15 @@ def transform_image(b64img):
     #cv2.imwrite('result.png', result)
     return result
 
+
 def complete_grid_login(grid_data):
     import pytesseract
-    from PIL import Image     
-    import base64
 
     decoded_grid_data = base64.b64decode(grid_data.split(',')[1])
-    img = Image.fromarray(transform_image(decoded_grid_data)) # convert cv2 to PIL
+    img = transform_image(decoded_grid_data) 
 
-    custom_config = '--psm 6 -c tessedit_char_whitelist=0123456789' #-l snum'
-    raw_text = pytesseract.image_to_string(img, lang='snum', config=custom_config)#, lang='snum')#, lang='eng', config=custom_config)
+    custom_config = '--psm 6 -c tessedit_char_whitelist=0123456789'
+    raw_text = pytesseract.image_to_string(img, lang='snum', config=custom_config)
 
     print('\nGrIDsure Challenge:\n')
     print(raw_text.replace(' ', '     ').replace('\n','\n\n'))
@@ -273,7 +269,6 @@ def complete_push_login(sps_url):
         return ''.join(value.split('/')[-1:]) # need to strip https://sps.us.safenetid.com/api/parkingspot/<code>
     else:
         return None
-
 
 
 while True:
@@ -407,7 +402,7 @@ for awsrole in awsroles:
 # otherwise just proceed
 print("")
 if len(awsroles) > 1:
-    print(awsroles)
+    #print(awsroles) For debug purposes
     i = 0
     print("Please choose the role you would like to assume:")
     for awsrole in awsroles:
