@@ -34,7 +34,7 @@ setuptools.setup(
     description="MFA for AWS CLI using SafeNet Trusted Access (STA)",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/thalesdemo/sta-awsclie",
+    url="https://github.com/thalesdemo/sta-awscli",
     packages=setuptools.find_packages(),
     package_data={"sta-awscli": ["VERSION"]},
     include_package_data=True,
