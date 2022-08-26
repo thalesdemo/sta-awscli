@@ -2,4 +2,36 @@
 requires = ["setuptools>=45", "setuptools_scm[toml]>=6.2"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools_scm]
+[project]
+name = "sta-awscli"
+version = "2.0.0"
+description = "MFA for AWS CLI using SafeNet Trusted Access (STA)"
+readme = "README.md"
+authors = [{ name = "Thales Demo", email = "admin@thalesdemo.ml" }]
+license = { file = "LICENSE" }
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+]
+keywords = ["STA", "AWS", "CLI", "SafeNet Trusted Access", "IDP"]
+dependencies = [
+    "boto3",
+    "requests"
+    "bs4"
+    "validators"
+    "pwinput"
+    "pytesseract"
+    "opencv-python"
+    "numpy",
+]
+requires-python = ">=3.9"
+
+[project.optional-dependencies]
+dev = []
+
+[project.urls]
+Homepage = "https://github.com/thalesdemo/sta-awscli"
+
+[project.scripts]
+sta-awscli = "sta-awscli.__main__:main"
