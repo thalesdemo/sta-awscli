@@ -42,11 +42,7 @@ setuptools.setup(
         'python-dateutil',
     ],
     setup_requires=['nose>=1.0'],
-    entry_points={
-        "console_scripts": [
-            "sta-awscli = {pkg}.cli:login".format(pkg=PACKAGE_NAME)
-        ]
-    },
+    entry_points={},
     license='MIT License',
     test_suite='nose.collector',
     tests_require=['coverage', 'nose', 'nose-cover3'],
