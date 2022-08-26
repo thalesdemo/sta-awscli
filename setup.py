@@ -44,7 +44,7 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     python_requires=">=3.5",
-    entry_points={"console_scripts": ["sta-awscli = sta-awscli.main:main"]},
+    entry_points={},
     install_requires=[
         "requests >= 2.25.1",
         "beautifulsoup4",
