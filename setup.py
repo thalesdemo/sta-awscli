@@ -2,7 +2,7 @@ from distutils.core import setup
 
 setup(
     name = 'sta-awscli',
-    packages = ['sta-awscli'],
+    packages = ['sta-awscli.py'],
     version = '2.0.0',  # Ideally should be same as your GitHub release tag varsion
     description = 'MFA for AWS CLI using SafeNet Trusted Access (STA)',
     author = 'Gur Talmor, Cina Shaykhian and Alex Basin',
