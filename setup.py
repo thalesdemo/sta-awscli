@@ -1,50 +1,59 @@
 import setuptools
+import subprocess
+import os
 
-PACKAGE_NAME = 'sta-awscli'
-VERSION = 'v2.0.0'
+sta_awscli_version = (
+    subprocess.run(["git", "describe", "--tags"], stdout=subprocess.PIPE)
+    .stdout.decode("utf-8")
+    .strip()
+)
+
+if "-" in sta_awscli_version:
+    # when not on tag, git describe outputs: "1.3.3-22-gdf81228"
+    # pip has gotten strict with version numbers
+    # so change it to: "1.3.3+22.git.gdf81228"
+    # See: https://peps.python.org/pep-0440/#local-version-segments
+    v,i,s = sta_awscli_version.split("-")
+    sta_awscli_version = v + "+" + i + ".git." + s
+
+assert "-" not in sta_awscli_version
+assert "." in sta_awscli_version
+
+assert os.path.isfile("sta-awscli/version.py")
+with open("sta-awscli/VERSION", "w", encoding="utf-8") as fh:
+    fh.write("%s\n" % sta_awscli_version)
+
+with open("README.md", "r", encoding="utf-8") as fh:
+    long_description = fh.read()
 
 setuptools.setup(
-    name=PACKAGE_NAME,
-    packages=[PACKAGE_NAME],
-    version=VERSION,
-    python_requires='>=3',
-    description='MFA for AWS CLI using SafeNet Trusted Access (STA)',
+    name="sta-awscli",
+    version=sta_awscli_version,
+    author="Gur Talmor, Cina Shaykhian and Alex Basin",
+    author_email="",
+    description="MFA for AWS CLI using SafeNet Trusted Access (STA)",
+    long_description=long_description,
+    long_description_content_type="text/markdown",
+    url="https://github.com/thalesdemo/sta-awsclie",
+    packages=setuptools.find_packages(),
+    package_data={"sta-awscli": ["VERSION"]},
+    include_package_data=True,
     classifiers=[
-        'Development Status :: 4 - Beta',
-        'Environment :: Console',
-        'License :: OSI Approved :: MIT License',
-        'Programming Language :: Python :: 3.5',
-        'Programming Language :: Python :: 3.6',
-        'Programming Language :: Python :: 3 :: Only',
-        'Topic :: Security',
-        'Topic :: System :: Systems Administration :: Authentication/Directory'
+        "Programming Language :: Python :: 3",
+        "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+        "Operating System :: OS Independent",
     ],
-    keywords='sta aws cli',
-    author='Gur Talmor, Cina Shaykhian and Alex Basin',
-    author_email='',
-    url='https://github.com/thalesdemo/sta-awscli',
-    download_url=(
-            'https://github.com/thalesdemo/sta-awscli/archive/refs/tags' +
-            VERSION +
-            '.tar.gz'
-    ),
-    py_modules=[PACKAGE_NAME],
+    python_requires=">=3.5",
+    entry_points={"console_scripts": ["sta-awscli = sta-awscli.main:main"]},
     install_requires=[
-        'boto3',
-        'pytesseract',
-        'keyring',
-        'requests',
-        'beautifulsoup4',
-        'urllib3',
-        'validators',
-        'opencv-python',
-        'pwinput',
-        'python-dateutil',
+        "requests >= 2.25.1",
+        "beautifulsoup4",
+        "boto3",
+        "opencv-python",
+        "validators",
+        "pytesseract",
+        "urllib3",
+        "pwinput",
+        "python-dateutil",
     ],
-    setup_requires=['nose>=1.0'],
-    entry_points={},
-    license='MIT License',
-    test_suite='nose.collector',
-    tests_require=['coverage', 'nose', 'nose-cover3'],
-    zip_safe=False,
 )
