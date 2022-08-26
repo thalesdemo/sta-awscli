@@ -1,3 +1,6 @@
+""" MFA for AWS CLI using SafeNet Trusted Access (STA) """
+__version__ = "2.0.0"
+
 ##########################################################################
 # MFA for AWS CLI using SafeNet Trusted Access (STA)
 ##########################################################################

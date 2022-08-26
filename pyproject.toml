@@ -1,0 +1,14 @@
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "sta-awscli"
+authors = [{name = "Gur Talmor, Cina Shaykhian and Alex Basin"}]
+readme = "README.md"
+license = {file = "LICENSE"}
+classifiers = ["License :: OSI Approved :: MIT License"]
+dynamic = ["2.0.0", "MFA for AWS CLI using SafeNet Trusted Access (STA)"]
+
+[project.urls]
+Home = "https://github.com/thalesdemo/sta-awscli"
