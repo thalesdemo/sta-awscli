@@ -28,6 +28,6 @@ jobs:
         .
     - name: Publish distribution 📦 to PyPI
       if: startsWith(github.ref, 'refs/tags')
-      uses: pypa/gh-action-pypi-publish@https://github.com/thalesdemo/sta-awscli/archive/refs/tags/v2.0.0.tar.gz
+      uses: pypa/gh-action-pypi-publish@v2.0.0.tar.gz
       with:
         password: ${{ secrets.PYPI_API_TOKEN }}
