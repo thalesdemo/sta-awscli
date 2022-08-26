@@ -46,3 +46,6 @@ dependencies = [
 [project.urls]
 "Homepage" = "https://github.com/thalesdemo/sta-awscli"
 "Bug Tracker" = "https://github.com/thalesdemo/sta-awscli/issues"
+
+[project.scripts]
+sta-awscli = "sta-awscli.__main__:main"
