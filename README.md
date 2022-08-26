@@ -18,11 +18,11 @@ On first execution, the script will collect the required information to create a
 For example:
 
 [config]
-aws_region = 
-cloud_idp = 
-is_new_kc = 
-tenant_reference_id = 
-aws_app_name = 
+aws_region =  
+cloud_idp =  
+is_new_kc =  
+tenant_reference_id =  
+aws_app_name =  
 
 Once the configuration is created, a connection is established to STA through Keycloak and the user will be asked to provide a username, based on STA authentication policy, AD Password and OTP. If the user only has single token (MobilePASS+ or GriDsure) assigned, the authentication will be triggered automatically (Push for MobilePASS+ or the pattern grid presented for GriDsure). For auto triggered Push - the user can cancel the Push using CTRL+C to manually enter OTP.
 If the user has multiple tokens assigned, the user is aksed to provide an OTP, but still has the abbility to trigger Push ("p" or blank OTP) and GriDsure ("g").
