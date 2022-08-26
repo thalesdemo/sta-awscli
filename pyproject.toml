@@ -48,4 +48,4 @@ dependencies = [
 "Bug Tracker" = "https://github.com/thalesdemo/sta-awscli/issues"
 
 [project.scripts]
-sta-awscli = "sta-awscli.__main__:main"
+sta-awscli = "sta_awscli.sta_awscli:main"
