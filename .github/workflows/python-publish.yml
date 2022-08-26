@@ -7,7 +7,7 @@ jobs:
     name: Build and publish Python 🐍 distributions 📦 to PyPI and TestPyPI
     runs-on: ubuntu-18.04
     steps:
-    - uses: actions/checkout@5c1279e868be6dca5c5c4cf28cafb2bb97308aaa
+    - uses: actions/checkout@sta-awscli
     - name: Set up Python 3.9
       uses: actions/setup-python@v2
       with:
@@ -28,6 +28,6 @@ jobs:
         .
     - name: Publish distribution 📦 to PyPI
       if: startsWith(github.ref, 'refs/tags')
-      uses: pypa/gh-action-pypi-publish@5c1279e868be6dca5c5c4cf28cafb2bb97308aaa
+      uses: pypa/gh-action-pypi-publish@main
       with:
         password: ${{ secrets.PYPI_API_TOKEN }}
