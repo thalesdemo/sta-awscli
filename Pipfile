@@ -1,0 +1,19 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+boto3 = "*"
+requests = "*"
+bs4 = "*"
+validators = "*"
+pwinput = "*"
+pytesseract = "*"
+opencv-python = "*"
+numpy = "*"
+
+[dev-packages]
+
+[requires]
+python_version = "3.9"
