@@ -1,7 +1,7 @@
 import setuptools
 
 PACKAGE_NAME = 'sta-awscli'
-VERSION = '2.0.0'
+VERSION = 'v2.0.0'
 
 setuptools.setup(
     name=PACKAGE_NAME,
