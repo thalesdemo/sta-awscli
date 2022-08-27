@@ -12,6 +12,7 @@ pwinput = "*"
 pytesseract = "*"
 opencv-python = "*"
 numpy = "*"
+argcomplete = "*"
 
 [dev-packages]
 

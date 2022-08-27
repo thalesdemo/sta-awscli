@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 ##########################################################################
 # MFA for AWS CLI using SafeNet Trusted Access (STA)
 ##########################################################################
@@ -41,7 +42,13 @@ import validators
 import pwinput
 import numpy
 import argparse
+import argcomplete
+import urllib.parse
 
+try:
+    import readline
+except ImportError:
+    import pyreadline as readline
 
 ##########################################################################
 # AWS variables
@@ -66,24 +73,97 @@ class ConfigFile:
     AWS_APP_NAME = 'aws_app_name'
 
 
-# Arg parser
-parser = argparse.ArgumentParser()
-parser.add_argument(
-        '-c', '--config',
-        required=False,
-        dest='config', default=None,
-        help='Specify script configuration file path'
-)
-args = parser.parse_args()
+# Default choices for aws region
+aws_region_list = [
+        'eu-north-1', 'ap-south-1', 'eu-west-3', 'eu-west-2', 'eu-west-1', 'eu-central-1', 
+        'ap-northeast-3', 'ap-northeast-2', 'ap-northeast-1', 'ap-east-1', 'ap-southeast-1', 'ap-southeast-2',
+        'sa-east-1', 'ca-central-1', 'us-east-1', 'us-east-2', 'us-west-1', 'us-west-2'
+]
 
 
-def main():
+##########################################################################
+# Functions
 
+# removes the table borders
+def transform_image(b64img):
+    import cv2
+
+    nparr = numpy.frombuffer(base64.b64decode(b64img), numpy.uint8)
+    image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+    result = image.copy()
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
+
+    # Remove horizontal lines
+    horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (40,1))
+    remove_horizontal = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, horizontal_kernel, iterations=2)
+    cnts = cv2.findContours(remove_horizontal, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    cnts = cnts[0] if len(cnts) == 2 else cnts[1]
+    for c in cnts:
+        cv2.drawContours(result, [c], -1, (255,255,255), 5)
+
+    # Remove vertical lines
+    vertical_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1,40))
+    remove_vertical = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, vertical_kernel, iterations=2)
+    cnts = cv2.findContours(remove_vertical, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    cnts = cnts[0] if len(cnts) == 2 else cnts[1]
+    for c in cnts:
+        cv2.drawContours(result, [c], -1, (255,255,255), 5)
+
+    #cv2.imwrite('result.png', result)
+    return result
+
+
+def complete_grid_login(grid_data):
+    import pytesseract
+
+    base64_grid_img = grid_data.split(',')[1]
+    img = transform_image(base64_grid_img) 
+
+    custom_config = '--psm 6 -c tessedit_char_whitelist=0123456789'
+    raw_text = pytesseract.image_to_string(img, lang='snum', config=custom_config)
+
+    print('\nGrIDsure Challenge:\n')
+    print(raw_text.replace(' ', '     ').replace('\n','\n\n'))
+
+    pip = pwinput.pwinput(prompt="Enter PIP: ", mask="*")
+    return pip
+
+
+def complete_push_login(sps_url):
+    sps_session = requests.Session()
+
+    try:
+        print('-> CTRL+C to enter manual OTP')
+        response = sps_session.post(sps_url, verify=True)
+    except KeyboardInterrupt:
+        return None
+    
+    if response.ok:
+        print('Push response OK')
+        return ''.join(sps_url.split('/')[-1:]) # strip https://sps.us.safenetid.com/api/parkingspot/<code>
+    else:
+        return None
+
+
+def region_completer(text, state):
+    options = [cmd for cmd in aws_region_list if cmd.startswith(text)]
+    if state < len(options):
+        return options[state]
+    else:
+        return None
+
+
+##########################################################################
+# Main function
+
+def main(**args):
     CONF_SECTION = 'config'
     HOME_DIR = os.path.expanduser('~')
 
-    if args.config:
-        cli_config_file_path = args.config
+    if args['config']:
+        cli_config_file_path = args['config']
     else:
         cli_config_file_path = os.path.join(HOME_DIR, '.aws', 'sta-awscli.conf')
 
@@ -98,15 +178,25 @@ def main():
         config.read(cli_config_file_path)
     else:
         print(f'{BColors.WARNING}Config file not found - prompting for configs{BColors.ENDC}\n')
-        aws_region = ''
-        while True:
-            aws_region = input('Enter AWS Region (e.g. us-east-1): ')
-            aws_regex = re.compile(r'[a-z]*-[a-z]*-[0-9]{1}')
+        readline.set_completer_delims('\n')
+        readline.parse_and_bind("tab: complete")
+        readline.set_completer(region_completer) # turn on auto-complete for region
 
-            if re.match(aws_regex, aws_region):
-                break
-            else:
-                print(f'{BColors.FAIL}Response not recognized - please provide a valid AWS Region{BColors.ENDC}\n')
+        if args['region'] in aws_region_list:
+                aws_region = args['region']
+        else:
+            aws_region = ''
+            while True:
+                aws_region = input('Enter AWS Region (e.g. us-east-1): ')
+                aws_regex = re.compile(r'[a-z]*-[a-z]*-[0-9]{1}')
+
+                if re.match(aws_regex, aws_region):
+                    args['region'] = aws_region
+                    break
+                else:
+                    print(f'{BColors.FAIL}Response not recognized - please provide a valid AWS Region{BColors.ENDC}\n')
+
+        readline.parse_and_bind('set disable-completion on')
 
         keycloak_url = ''
         while True:
@@ -146,21 +236,24 @@ def main():
         config[CONF_SECTION][ConfigFile.KEYCLOAK_URL] = keycloak_url
         config[CONF_SECTION][ConfigFile.IS_KEYCLOAK_18_OR_HIGHER] = is_keycloak_18_or_higher
         config[CONF_SECTION][ConfigFile.KC_TENANT_ID] = kc_tenant_id
-        config[CONF_SECTION][ConfigFile.AWS_APP_NAME] = aws_app_name
+        config[CONF_SECTION][ConfigFile.AWS_APP_NAME] = urllib.parse.unquote(aws_app_name)
 
-        if not os.path.exists(os.path.dirname(cli_config_file_path)):
+        base_directory = os.path.dirname(cli_config_file_path)
+        if base_directory and not os.path.exists(base_directory):
             os.makedirs(os.path.dirname(cli_config_file_path))
 
-        with open(cli_config_file_path, 'w') as configfile:
-            config.write(configfile)
+        with open(cli_config_file_path, 'w') as filename:
+            config.write(filename)
 
         print(f"{BColors.OKGREEN}Config file created in: {BColors.ENDC}" + cli_config_file_path)
 
 
     # region: The default AWS region that this script will connect
     # to for all API calls (note that some regions may not work)
-
-    region = config.get(CONF_SECTION, ConfigFile.AWS_REGION)
+    if args['region']:
+        region = args['region']
+    else:
+        region = config.get(CONF_SECTION, ConfigFile.AWS_REGION)
 
     # output format: The AWS CLI output format that will be configured in the
     # user profile (affects subsequent CLI calls)
@@ -188,13 +281,10 @@ def main():
     # tenant specific console URL, in the User Portal URL or in metadata files
     tenant_reference_id = config.get(CONF_SECTION, ConfigFile.KC_TENANT_ID)
 
-    # aws_app_name: The name you have given to the AWS app within the STA console
-    # use "%20" (excluding "") instead of any blank spaces
-    aws_app_name = config.get(CONF_SECTION, ConfigFile.AWS_APP_NAME)
+    # aws_app_name: The name you have given to the AWS app in the Identity Provider
+    aws_app_name = urllib.parse.quote(config.get(CONF_SECTION, ConfigFile.AWS_APP_NAME))
 
     # idpentryurl: The URL for the STA IdP including all the variables we need
-
-
     if is_new_kc.lower() == 'y':
         idpentryurl = "https://" + cloud_idp + "/realms/" + tenant_reference_id + "/protocol/saml/clients/" + aws_app_name
 
@@ -207,8 +297,8 @@ def main():
 
     ##########################################################################
     # Debugging if you are having any major issues:
-
     # logging.basicConfig(level=logging.DEBUG)
+
 
     ##########################################################################
     # STA welcome message:
@@ -232,69 +322,6 @@ def main():
     # Capture the idpauthformsubmiturl, which is the final url after all the 302s
     idpauthformsubmiturl = response.url
     assertion = ''
-
-
-    # removes the table borders
-    def transform_image(b64img):
-        import cv2
-
-        nparr = numpy.frombuffer(b64img, numpy.uint8)
-        image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-
-        result = image.copy()
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
-
-        # Remove horizontal lines
-        horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (40,1))
-        remove_horizontal = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, horizontal_kernel, iterations=2)
-        cnts = cv2.findContours(remove_horizontal, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        cnts = cnts[0] if len(cnts) == 2 else cnts[1]
-        for c in cnts:
-            cv2.drawContours(result, [c], -1, (255,255,255), 5)
-
-        # Remove vertical lines
-        vertical_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1,40))
-        remove_vertical = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, vertical_kernel, iterations=2)
-        cnts = cv2.findContours(remove_vertical, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        cnts = cnts[0] if len(cnts) == 2 else cnts[1]
-        for c in cnts:
-            cv2.drawContours(result, [c], -1, (255,255,255), 5)
-
-        #cv2.imwrite('result.png', result)
-        return result
-
-
-    def complete_grid_login(grid_data):
-        import pytesseract
-
-        decoded_grid_data = base64.b64decode(grid_data.split(',')[1])
-        img = transform_image(decoded_grid_data) 
-
-        custom_config = '--psm 6 -c tessedit_char_whitelist=0123456789'
-        raw_text = pytesseract.image_to_string(img, lang='snum', config=custom_config)
-
-        print('\nGrIDsure Challenge:\n')
-        print(raw_text.replace(' ', '     ').replace('\n','\n\n'))
-
-        pip = pwinput.pwinput(prompt="Enter PIP: ", mask="*")
-        return pip
-
-
-    def complete_push_login(sps_url):
-        sps_session = requests.Session()
-
-        try:
-            print('-> CTRL+C to enter manual OTP')
-            response = sps_session.post(sps_url, verify=sslverification)
-        except KeyboardInterrupt:
-            return None
-        
-        if response.ok:
-            print('Push response OK')
-            return ''.join(value.split('/')[-1:]) # strip https://sps.us.safenetid.com/api/parkingspot/<code>
-        else:
-            return None
 
 
     while True:
@@ -505,4 +532,35 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # Arg parser
+    parser = argparse.ArgumentParser(
+                description='MFA for AWS CLI using SafeNet Trusted Access (STA)', 
+                epilog="For more info, visit: https://github.com/thalesdemo/sta-awscli"
+    )
+
+    parser.add_argument(
+            '-c', '--config',
+            required=False,
+            dest='config', default=None,
+            help='Specify script configuration file path'
+    )
+
+    region_group = parser.add_mutually_exclusive_group(required=False)
+    region_group.add_argument(
+            '-r', 
+            dest='region',
+            help='Specify any AWS region (without input checking)'
+    )
+    region_group.add_argument(
+            '--region', 
+            dest='region', default='all',
+            nargs='?',
+            const='all',
+            type=str.lower,
+            choices= aws_region_list,
+            help='Specify AWS region (e.g. us-east-1)'
+    )
+
+    argcomplete.autocomplete(parser)
+    args = parser.parse_args()
+    main(**vars(args))
