@@ -1,17 +1,41 @@
-name: Publish to PyPI.org
+name: publish
+
+# Controls when the workflow will run
 on:
-  release:
-    types: [published]
+    
+    # Workflow will run when a release has been published for the package
+    release:
+        types:
+            - published
+
+    # Allows you to run this workflow manually from the Actions tab
+    workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  pypi:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 2
-      - run: python3 -m pip install --upgrade build && python3 -m build
-      - name: Publish package
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          password: ${{ secrets.PYPI_API_TOKEN }}
+
+    # This workflow contains a single job called "publish"
+    publish:
+
+        # The type of runner that the job will run on
+        runs-on: ubuntu-latest
+
+        # Steps represent a sequence of tasks that will be executed as part of the job
+        steps:
+
+            # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+            -   uses: actions/checkout@v3
+                with:
+                    path: main
+
+
+            -   name: Set up Python 3.9
+                uses: actions/setup-python@v3
+                with:
+                    python-version: 3.9
+                    cache: pip
+
+            -   name: To PyPI using Flit
+                uses: AsifArmanRahman/to-pypi-using-flit@v1
+                with:
+                    password: ${{ secrets.PYPI_API_TOKEN }}
