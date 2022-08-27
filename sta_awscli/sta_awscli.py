@@ -1,11 +1,8 @@
-""" MFA for AWS CLI using SafeNet Trusted Access (STA) """
-__version__ = "2.0.0"
-
 ##########################################################################
 # MFA for AWS CLI using SafeNet Trusted Access (STA)
 ##########################################################################
 # version: 2.0
-# last updated on: 2022-08-25
+# last updated on: 2022-08-26
 #
 #
 # NOTE: This script was adapted from a script written by Quint Van Deman
@@ -43,6 +40,8 @@ from dateutil import tz
 import validators
 import pwinput
 import numpy
+import argparse
+
 
 ##########################################################################
 # AWS variables
@@ -67,15 +66,35 @@ class ConfigFile:
     AWS_APP_NAME = 'aws_app_name'
 
 
+# Arg parser
+parser = argparse.ArgumentParser()
+parser.add_argument(
+        '-c', '--config',
+        required=False,
+        dest='config', default=None,
+        help='Specify script configuration file path'
+)
+args = parser.parse_args()
+
+
 def main():
+
     CONF_SECTION = 'config'
-    cli_config_file_path = 'sta-awscli.conf'
+    HOME_DIR = os.path.expanduser('~')
+
+    if args.config:
+        cli_config_file_path = args.config
+    else:
+        cli_config_file_path = os.path.join(HOME_DIR, '.aws', 'sta-awscli.conf')
 
     config = configparser.ConfigParser()
 
     if os.path.exists(cli_config_file_path):
-        absolute_path = os.path.abspath(cli_config_file_path)
-        print(f'{BColors.OKGREEN}Config file found in: {BColors.ENDC}' + absolute_path)
+        if not os.path.isfile(cli_config_file_path):
+            print('You must also include the configuration filename.')
+            sys.exit(1)
+
+        print(f'{BColors.OKGREEN}Config file found in: {BColors.ENDC}' + cli_config_file_path)
         config.read(cli_config_file_path)
     else:
         print(f'{BColors.WARNING}Config file not found - prompting for configs{BColors.ENDC}\n')
@@ -129,10 +148,13 @@ def main():
         config[CONF_SECTION][ConfigFile.KC_TENANT_ID] = kc_tenant_id
         config[CONF_SECTION][ConfigFile.AWS_APP_NAME] = aws_app_name
 
+        if not os.path.exists(os.path.dirname(cli_config_file_path)):
+            os.makedirs(os.path.dirname(cli_config_file_path))
+
         with open(cli_config_file_path, 'w') as configfile:
             config.write(configfile)
 
-        print(f"{BColors.OKGREEN}Config file created in: {BColors.ENDC}" + os.path.abspath(cli_config_file_path))
+        print(f"{BColors.OKGREEN}Config file created in: {BColors.ENDC}" + cli_config_file_path)
 
 
     # region: The default AWS region that this script will connect
@@ -146,7 +168,7 @@ def main():
 
     # awsconfigfile: The file where this script will store the temp
     # credentials under the user profile
-    awsconfigfile = '/.aws/credentials'
+    awsconfigfile = os.path.join(HOME_DIR, '.aws', 'credentials')
 
     # SSL certificate verification: Whether or not strict certificate
     # verification is done, False should only be used for dev/test
@@ -270,7 +292,7 @@ def main():
         
         if response.ok:
             print('Push response OK')
-            return ''.join(value.split('/')[-1:]) # need to strip https://sps.us.safenetid.com/api/parkingspot/<code>
+            return ''.join(value.split('/')[-1:]) # strip https://sps.us.safenetid.com/api/parkingspot/<code>
         else:
             return None
 
@@ -440,13 +462,9 @@ def main():
 
     # token = conn.assume_role_with_saml(role_arn, principal_arn, assertion)
 
-    # Write the AWS STS token into the AWS credential file
-    home = expanduser("~")
-    filename = home + awsconfigfile
-
     # Read in the existing config file
     config = configparser.RawConfigParser()
-    config.read(filename)
+    config.read(awsconfigfile)
 
     # Put the credentials into the STA user's profile
     # TODO: Consider (option)to export the keys/token as environmental variables
@@ -460,8 +478,8 @@ def main():
     config.set(sas_user, 'aws_session_token', token['Credentials']['SessionToken'])
 
     # Write the updated config file
-    with open(filename, 'w+') as configfile:
-        config.write(configfile)
+    with open(awsconfigfile, 'w+') as filename:
+        config.write(filename)
 
     ##########################################################################
     # Provide user feedback
