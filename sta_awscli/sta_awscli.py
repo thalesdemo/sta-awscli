@@ -3,9 +3,7 @@ __version__ = '2.0.4'
 ##########################################################################
 # MFA for AWS CLI using SafeNet Trusted Access (STA)
 ##########################################################################
-# version: 2.0
-# last updated on: 2022-08-26
-#
+# Last updated on: 2022-08-27
 #
 # NOTE: This script was adapted from a script written by Quint Van Deman
 # published on the AWS Security Blog (https://amzn.to/2gT8IAZ). Notable
@@ -27,7 +25,7 @@ __version__ = '2.0.4'
 # DISCLAIMER: This script is provided "as-is" without any warranty of
 # any kind, either expressed or implied.
 # ************************************************************************
-# !/usr/bin/python3
+
 import sys
 import boto3
 import requests
