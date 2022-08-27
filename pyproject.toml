@@ -8,7 +8,7 @@ version = "2.0.0"
 authors = ["Gur Talmor, Cina Shaykhian and Alex Basin"]
 description = "MFA for AWS CLI using SafeNet Trusted Access (STA)"
 readme = "README.md"
-license = { file="LICENSE" }
+license = "MIT License"
 homepage = "https://github.com/thalesdemo/sta-awscli"
 repository = "https://github.com/thalesdemo/sta-awscli"
 classifiers = [
