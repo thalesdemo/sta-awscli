@@ -47,7 +47,7 @@ jobs:
           poetry install --no-interaction
       - name: Publish to PyPI
         env:
-          PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
+          PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
         run: |
           poetry config pypi-token.pypi $PYPI_TOKEN
           poetry publish --build
