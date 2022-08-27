@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+__version__ = '2.0.4'
 ##########################################################################
 # MFA for AWS CLI using SafeNet Trusted Access (STA)
 ##########################################################################
@@ -86,6 +87,12 @@ aws_region_list = [
 parser = argparse.ArgumentParser(
             description='MFA for AWS CLI using SafeNet Trusted Access (STA)', 
             epilog="For more info, visit: https://github.com/thalesdemo/sta-awscli"
+)
+
+parser.add_argument(
+        '-v', '--version',
+        action='version',
+        version="%(prog)s v" + __version__
 )
 
 parser.add_argument(
@@ -279,7 +286,7 @@ def main():
         with open(cli_config_file_path, 'w') as filename:
             config.write(filename)
 
-        print(f"{BColors.OKGREEN}Config file created in: {BColors.ENDC}" + cli_config_file_path)
+        print(f"{BColors.OKGREEN}Config file created in: {BColors.ENDC}" + os.path.abspath(cli_config_file_path))
 
 
     # region: The default AWS region that this script will connect
