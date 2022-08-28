@@ -46,6 +46,7 @@ import urllib.parse
 import subprocess
 from packaging.version import parse as parse_version
 from requests.exceptions import ConnectionError
+import colorama
 
 try:
     import readline
@@ -131,8 +132,8 @@ def setup_argparser():
             '-r', 
             dest='region',
             nargs='?',
-            const=True,
             default=[],
+            const=True,
             help='Specify any AWS region (without input checking)'
     )
     region_group.add_argument(
@@ -140,6 +141,7 @@ def setup_argparser():
             dest='region', 
             nargs='?',
             default=[],
+            const=True,
             type=str.lower,
             choices=aws_region_list,
             help='Specify AWS region (e.g. us-east-1)'
@@ -288,11 +290,19 @@ def is_tesseract_installed():
     
     return True
 
+
+def init():
+    # If using Windows, init() will cause anything sent to stdout or stderr
+    # will have ANSI color codes converted to the Windows versions. Hooray!
+    # If you are already using an ANSI compliant shell, it won't do anything
+    colorama.init()
+
+
 ##########################################################################
 # Main function
 
 def main():
-
+    init()
     args = setup_argparser()
     config = configparser.ConfigParser()
 

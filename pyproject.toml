@@ -44,7 +44,8 @@ soupsieve = "2.3.2.post1"
 urllib3 = "1.26.12"
 validators = "0.20.0"
 argcomplete = "2.0.0"
-pyreadline = "2.1"
+pyreadline3 = "3.4.1"
+colorama = "0.4.5"
 
 [tool.poetry.scripts]
 sta-awscli = "sta_awscli.sta_awscli:main"

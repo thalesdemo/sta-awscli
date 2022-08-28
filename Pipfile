@@ -13,8 +13,9 @@ pytesseract = "*"
 opencv-python = "*"
 numpy = "*"
 argcomplete = "*"
-pyreadline = "*"
 packaging = "*"
+colorama = "*"
+pyreadline3 = "*"
 
 [dev-packages]
 
