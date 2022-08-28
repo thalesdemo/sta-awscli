@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "sta-awscli"
-version = "2.0.4"
+version = "2.0.5"
 authors = ["Gur Talmor, Cina Shaykhian and Alex Basin"]
 description = "MFA for AWS CLI using SafeNet Trusted Access (STA)"
 readme = "README.md"
@@ -44,6 +44,7 @@ soupsieve = "2.3.2.post1"
 urllib3 = "1.26.12"
 validators = "0.20.0"
 argcomplete = "2.0.0"
+pyreadline = "2.1"
 
 [tool.poetry.scripts]
 sta-awscli = "sta_awscli.sta_awscli:main"

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-__version__ = '2.0.4'
+__version__ = '2.0.5'
+__homepage__ = 'https://pypi.org/project/sta-awscli'
 ##########################################################################
 # MFA for AWS CLI using SafeNet Trusted Access (STA)
 ##########################################################################
@@ -34,7 +35,6 @@ import base64
 import xml.etree.ElementTree as ET
 import re
 from bs4 import BeautifulSoup
-from os.path import expanduser
 import os.path
 from dateutil import tz
 import validators
@@ -43,14 +43,19 @@ import numpy
 import argparse
 import argcomplete
 import urllib.parse
+from packaging.version import parse as parse_version
 
 try:
     import readline
 except ImportError:
     import pyreadline as readline
 
+
 ##########################################################################
-# AWS variables
+# Variables
+
+CONF_SECTION = 'config'
+HOME_DIR = os.path.expanduser('~')
 
 class BColors:
     HEADER = '\033[95m'
@@ -63,7 +68,6 @@ class BColors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
-
 class ConfigFile:
     AWS_REGION = 'aws_region'
     KEYCLOAK_URL = 'cloud_idp'
@@ -71,57 +75,91 @@ class ConfigFile:
     KC_TENANT_ID = 'tenant_reference_id'
     AWS_APP_NAME = 'aws_app_name'
 
-
 # Default choices for aws region
 aws_region_list = [
         'eu-north-1', 'ap-south-1', 'eu-west-3', 'eu-west-2', 'eu-west-1', 'eu-central-1', 
         'ap-northeast-3', 'ap-northeast-2', 'ap-northeast-1', 'ap-east-1', 'ap-southeast-1', 'ap-southeast-2',
-        'sa-east-1', 'ca-central-1', 'us-east-1', 'us-east-2', 'us-west-1', 'us-west-2'
+        'sa-east-1', 'ca-central-1', 'us-east-1', 'us-east-2', 'us-west-1', 'us-west-2',
 ]
 
 
 ##########################################################################
 # Arg parser
-parser = argparse.ArgumentParser(
-            description='MFA for AWS CLI using SafeNet Trusted Access (STA)', 
-            epilog="For more info, visit: https://github.com/thalesdemo/sta-awscli"
-)
 
-parser.add_argument(
-        '-v', '--version',
-        action='version',
-        version="%(prog)s v" + __version__
-)
+def setup_argparser():
+    parser = argparse.ArgumentParser(
+                description='MFA for AWS CLI using SafeNet Trusted Access (STA)', 
+                epilog="For more info, visit: https://github.com/thalesdemo/sta-awscli"
+    )
 
-parser.add_argument(
-        '-c', '--config',
-        required=False,
-        dest='config', default=None,
-        help='Specify script configuration file path'
-)
+    parser.add_argument(
+            '-v', '--version',
+            action='version',
+            version=f'{check_software_version()}'
+           
+    )
 
-region_group = parser.add_mutually_exclusive_group(required=False)
-region_group.add_argument(
-        '-r', 
-        dest='region',
-        help='Specify any AWS region (without input checking)'
-)
-region_group.add_argument(
-        '--region', 
-        dest='region', default='all',
-        nargs='?',
-        const='all',
-        type=str.lower,
-        choices= aws_region_list,
-        help='Specify AWS region (e.g. us-east-1)'
-)
+    parser.add_argument(
+            '-c', '--config',
+            required=False,
+            dest='cli_config_path', 
+            default=os.path.join(HOME_DIR, '.aws', 'sta-awscli.conf'),
+            help='Specify script configuration file path'
+    )
 
-argcomplete.autocomplete(parser)
-args = parser.parse_args()
+    region_group = parser.add_mutually_exclusive_group(required=False)
+    region_group.add_argument(
+            '-r', 
+            dest='region',
+            nargs='?',
+            const='',
+            help='Specify any AWS region (without input checking)'
+    )
+    region_group.add_argument(
+            '--region', 
+            dest='region', 
+            nargs='?',
+            default=[],
+            const=True,
+            type=str.lower,
+            choices= aws_region_list,
+            help='Specify AWS region (e.g. us-east-1)'
+    )
+
+    argcomplete.autocomplete(parser)
+    args = parser.parse_args()
+    return args
 
 
 ##########################################################################
 # Functions
+
+def check_software_version():
+    package='sta-awscli'
+    title = 'MFA for AWS CLI using SafeNet Trusted Access (STA)'
+    delimiter = lambda x : '\n' + str(x)*100 + '\n'
+
+    print(package + ' (v' + __version__ + ') ' + title)
+
+    #TODO: add exception handling
+    response = requests.get(f'https://pypi.org/pypi/{package}/json')
+    latest_version = response.json()['info']['version']
+
+    update_available_message = \
+        f"{BColors.OKGREEN}{delimiter('█')}\n     ⚠️    A new version of sta-awscli is now available! " + \
+        f"(upgrade from {__version__} to {latest_version})\n\n" + \
+        f"\t  Simply use the pip package manager to update:\n\n\t  pip install --upgrade sta-awscli\n{delimiter('█')}{BColors.ENDC}"      
+
+    no_update_available_message = \
+        f'{BColors.OKCYAN}Checked updates, this version matches to the latest one available!{BColors.ENDC}'
+
+    if parse_version(latest_version) > parse_version(__version__):
+        print(update_available_message)
+    else:
+        print(no_update_available_message)
+
+    return f'Project homepage: {__homepage__}'
+
 
 # removes the table borders
 def transform_image(b64img):
@@ -194,48 +232,50 @@ def region_completer(text, state):
         return None
 
 
+def input_aws_region():
+    aws_region = ''
+    
+    readline.parse_and_bind("tab: complete")
+    readline.set_completer(region_completer) # turn on auto-complete for aws region
+    readline.set_completer_delims('\n')
+
+    while True:
+        aws_region = input('Enter AWS Region (e.g. us-east-1): ')
+        aws_regex = re.compile(r'[a-z]*-[a-z]*-[0-9]{1}')
+
+        if re.match(aws_regex, aws_region):
+            break
+        else:
+            print(f'{BColors.FAIL}Response not recognized - please provide a valid AWS Region{BColors.ENDC}\n')
+
+    readline.parse_and_bind('set disable-completion on')
+
+    return aws_region
+
+
 ##########################################################################
 # Main function
 
 def main():
-    CONF_SECTION = 'config'
-    HOME_DIR = os.path.expanduser('~')
 
-    if args.config:
-        cli_config_file_path = args.config
-    else:
-        cli_config_file_path = os.path.join(HOME_DIR, '.aws', 'sta-awscli.conf')
-
+    args = setup_argparser()
     config = configparser.ConfigParser()
 
-    if os.path.exists(cli_config_file_path):
-        if not os.path.isfile(cli_config_file_path):
+    if os.path.exists(args.cli_config_path):
+        if not os.path.isfile(args.cli_config_path):
             print('You must also include the configuration filename.')
             sys.exit(1)
 
-        print(f'{BColors.OKGREEN}Config file found in: {BColors.ENDC}' + cli_config_file_path)
-        config.read(cli_config_file_path)
+        print(f'{BColors.OKGREEN}Config file found in: {BColors.ENDC}' + args.cli_config_path)
+        config.read(args.cli_config_path)
     else:
-        print(f'{BColors.WARNING}Config file not found - prompting for configs{BColors.ENDC}\n')
-        readline.set_completer_delims('\n')
-        readline.parse_and_bind("tab: complete")
-        readline.set_completer(region_completer) # turn on auto-complete for region
+        print(f'{BColors.WARNING}Config file does not exist - prompting for configs{BColors.ENDC}\n')
 
+        # aws region selector
         if args.region in aws_region_list:
-                aws_region = args.region
+            aws_region = args.region
         else:
-            aws_region = ''
-            while True:
-                aws_region = input('Enter AWS Region (e.g. us-east-1): ')
-                aws_regex = re.compile(r'[a-z]*-[a-z]*-[0-9]{1}')
-
-                if re.match(aws_regex, aws_region):
-                    args.region = aws_region
-                    break
-                else:
-                    print(f'{BColors.FAIL}Response not recognized - please provide a valid AWS Region{BColors.ENDC}\n')
-
-        readline.parse_and_bind('set disable-completion on')
+            aws_region = input_aws_region()
 
         keycloak_url = ''
         while True:
@@ -277,26 +317,29 @@ def main():
         config[CONF_SECTION][ConfigFile.KC_TENANT_ID] = kc_tenant_id
         config[CONF_SECTION][ConfigFile.AWS_APP_NAME] = urllib.parse.unquote(aws_app_name)
 
-        base_directory = os.path.dirname(cli_config_file_path)
+        base_directory = os.path.dirname(args.cli_config_path)
         if base_directory and not os.path.exists(base_directory):
-            os.makedirs(os.path.dirname(cli_config_file_path))
+            os.makedirs(os.path.dirname(args.cli_config_path))
 
-        with open(cli_config_file_path, 'w') as filename:
+        with open(args.cli_config_path, 'w') as filename:
             config.write(filename)
 
-        print(f"{BColors.OKGREEN}Config file created in: {BColors.ENDC}" + os.path.abspath(cli_config_file_path))
+        print(f"{BColors.OKGREEN}Config file created in: {BColors.ENDC}" + os.path.abspath(args.cli_config_path))
 
-
-    # region: The default AWS region that this script will connect
-    # to for all API calls (note that some regions may not work)
-    if args.region:
-        region = args.region
-    else:
-        region = config.get(CONF_SECTION, ConfigFile.AWS_REGION)
 
     # output format: The AWS CLI output format that will be configured in the
     # user profile (affects subsequent CLI calls)
     outputformat = 'json'
+
+    # region: The default AWS region that this script will connect
+    # to for all API calls (note that some regions may not work)
+    if args.region:
+        if args.region in aws_region_list:
+            region = args.region
+        else:
+            region = input_aws_region()
+    else:
+        region = config.get(CONF_SECTION, ConfigFile.AWS_REGION)
 
     # awsconfigfile: The file where this script will store the temp
     # credentials under the user profile
