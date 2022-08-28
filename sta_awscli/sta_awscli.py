@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 __title__ = "MFA for AWS CLI using SafeNet Trusted Access (STA)"
 __homepage__ = 'https://github.com/thalesdemo/sta-awscli'
-__version__ = '2.0.6'
+__version__ = '2.0.7'
 ##########################################################################
 # MFA for AWS CLI using SafeNet Trusted Access (STA)
 ##########################################################################
@@ -44,6 +44,7 @@ import argparse
 import argcomplete
 import urllib.parse
 from packaging.version import parse as parse_version
+from requests.exceptions import ConnectionError
 
 try:
     import readline
@@ -158,21 +159,27 @@ def check_software_version():
     print(package + ' (v' + __version__ + ') ' + __title__)
 
     #TODO: add exception handling
-    response = requests.get(f'https://pypi.org/pypi/{package}/json')
-    latest_version = response.json()['info']['version']
+    try:
+        url = f'https://pypi.org/pypi/{package}/json'
+        response = requests.get(url)
+        latest_version = response.json()['info']['version']
 
-    update_available_message = \
-        f"{BColors.OKGREEN}{delimiter('█')}\n     ⚠️    A new version of sta-awscli is now available! " + \
-        f"(upgrade from {__version__} to {latest_version})\n\n" + \
-        f"\t  Simply use the pip package manager to update:\n\n\t  pip install --upgrade sta-awscli\n{delimiter('█')}{BColors.ENDC}"      
+        update_available_message = \
+            f"{BColors.OKGREEN}{delimiter('█')}\n     ⚠️    A new version of sta-awscli is now available! " + \
+            f"(upgrade from {__version__} to {latest_version})\n\n" + \
+            f"\t  Simply use the pip package manager to update:\n\n\t  pip install --upgrade sta-awscli\n{delimiter('█')}{BColors.ENDC}"      
 
-    no_update_available_message = \
-        f'{BColors.OKCYAN}Checked updates, this version matches to the latest one available!{BColors.ENDC}'
+        no_update_available_message = \
+            f'{BColors.OKCYAN}Checked updates, this version matches to the latest one available!{BColors.ENDC}'
 
-    if parse_version(latest_version) > parse_version(__version__):
-        print(update_available_message)
-    else:
-        print(no_update_available_message)
+        if parse_version(latest_version) > parse_version(__version__):
+            print(update_available_message)
+        else:
+            print(no_update_available_message)
+
+    except (ConnectionError, KeyError):
+        latest_version = None
+        print(f'{BColors.WARNING}WARNING: Could not fetch latest version online at: {url}{BColors.ENDC}')
 
     return f'Project homepage: {__homepage__}'
 
