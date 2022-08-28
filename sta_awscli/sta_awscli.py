@@ -43,6 +43,7 @@ import numpy
 import argparse
 import argcomplete
 import urllib.parse
+import subprocess
 from packaging.version import parse as parse_version
 from requests.exceptions import ConnectionError
 
@@ -217,7 +218,7 @@ def transform_image(b64img):
 
 def complete_grid_login(grid_data):
     import pytesseract
-
+    
     base64_grid_img = grid_data.split(',')[1]
     img = transform_image(base64_grid_img) 
 
@@ -275,6 +276,17 @@ def input_aws_region():
 
     return aws_region
 
+def is_tesseract_installed():
+    try:
+        subprocess.call('tesseract', 
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.STDOUT)
+    except FileNotFoundError:
+        print(f'{BColors.WARNING}Tesseract could not be found on this machine and is required for GridSure login.')
+        print(f'Please read instructions at: https://tesseract-ocr.github.io/tessdoc/Installation.html{BColors.ENDC}')
+        return False
+    
+    return True
 
 ##########################################################################
 # Main function
@@ -501,7 +513,10 @@ def main():
 
                     grid_image = soup.find(id='GRIDSUREImage')
                     if grid_image:
-                        authentication_type = 'GRID'
+                        if is_tesseract_installed():
+                            authentication_type = 'GRID'
+                        else:
+                            print(f'{BColors.FAIL}A grid image was detected on the page but could not be rendered due to missing dependencies.{BColors.ENDC}')
 
                     for inputtag in login_form.find_all(re.compile('(label)')):
                         # Solving for Policy in STA with "AD Password + OTP"
