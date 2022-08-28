@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-__version__ = '2.0.5'
-__homepage__ = 'https://pypi.org/project/sta-awscli'
+__title__ = "MFA for AWS CLI using SafeNet Trusted Access (STA)"
+__homepage__ = 'https://github.com/thalesdemo/sta-awscli'
+__version__ = '2.0.6'
 ##########################################################################
 # MFA for AWS CLI using SafeNet Trusted Access (STA)
 ##########################################################################
@@ -26,7 +27,6 @@ __homepage__ = 'https://pypi.org/project/sta-awscli'
 # DISCLAIMER: This script is provided "as-is" without any warranty of
 # any kind, either expressed or implied.
 # ************************************************************************
-
 import sys
 import boto3
 import requests
@@ -74,6 +74,7 @@ class ConfigFile:
     IS_KEYCLOAK_18_OR_HIGHER = 'is_new_kc'
     KC_TENANT_ID = 'tenant_reference_id'
     AWS_APP_NAME = 'aws_app_name'
+    STA_USERNAME = 'sta_username'
 
 # Default choices for aws region
 aws_region_list = [
@@ -88,8 +89,8 @@ aws_region_list = [
 
 def setup_argparser():
     parser = argparse.ArgumentParser(
-                description='MFA for AWS CLI using SafeNet Trusted Access (STA)', 
-                epilog="For more info, visit: https://github.com/thalesdemo/sta-awscli"
+                description=__title__, 
+                epilog=f"For more info, visit: {__homepage__}"
     )
 
     parser.add_argument(
@@ -107,6 +108,21 @@ def setup_argparser():
             help='Specify script configuration file path'
     )
 
+    parser.add_argument(
+            '--update-config', 
+            required=False,
+            dest='update_config', 
+            action='store_true',
+            help='Force update sta-awscli configuration file'
+    )
+
+    parser.add_argument(
+            '-u', '--username',
+            dest='username',
+            default=None,
+            help='Specify your SafeNet Trusted Access Username'
+    )
+
     region_group = parser.add_mutually_exclusive_group(required=False)
     region_group.add_argument(
             '-r', 
@@ -122,7 +138,7 @@ def setup_argparser():
             default=[],
             const=True,
             type=str.lower,
-            choices= aws_region_list,
+            choices=aws_region_list,
             help='Specify AWS region (e.g. us-east-1)'
     )
 
@@ -136,10 +152,9 @@ def setup_argparser():
 
 def check_software_version():
     package='sta-awscli'
-    title = 'MFA for AWS CLI using SafeNet Trusted Access (STA)'
     delimiter = lambda x : '\n' + str(x)*100 + '\n'
 
-    print(package + ' (v' + __version__ + ') ' + title)
+    print(package + ' (v' + __version__ + ') ' + __title__)
 
     #TODO: add exception handling
     response = requests.get(f'https://pypi.org/pypi/{package}/json')
@@ -261,7 +276,7 @@ def main():
     args = setup_argparser()
     config = configparser.ConfigParser()
 
-    if os.path.exists(args.cli_config_path):
+    if not args.update_config and os.path.exists(args.cli_config_path):
         if not os.path.isfile(args.cli_config_path):
             print('You must also include the configuration filename.')
             sys.exit(1)
@@ -310,12 +325,33 @@ def main():
             else:
                 print(f'{BColors.FAIL}Response not recognized - AWS App Name cannot be empty{BColors.ENDC}\n')
 
+        sta_username = ''
+        if args.username:
+            sta_username = args.username
+        else:
+            save_username = ''
+            while True:
+                save_username = input('Do you want to save the STA username (y/n): ')
+                if save_username.lower() == 'n' or save_username.lower() == 'no':
+                    break
+                elif save_username.lower() == 'y' or save_username.lower() == 'yes':
+                    while True:
+                        sta_username = input('Enter Username: ')
+                        if sta_username != '':
+                            break
+                        else:
+                            print(f'{BColors.FAIL}Response not recognized - STA username cannot be empty{BColors.ENDC}\n')
+                    break
+                else:
+                    print(f'{BColors.FAIL}Response not recognized - please provide correct response{BColors.ENDC}\n')
+           
         config[CONF_SECTION] = {}
         config[CONF_SECTION][ConfigFile.AWS_REGION] = aws_region
         config[CONF_SECTION][ConfigFile.KEYCLOAK_URL] = keycloak_url
         config[CONF_SECTION][ConfigFile.IS_KEYCLOAK_18_OR_HIGHER] = is_keycloak_18_or_higher
         config[CONF_SECTION][ConfigFile.KC_TENANT_ID] = kc_tenant_id
         config[CONF_SECTION][ConfigFile.AWS_APP_NAME] = urllib.parse.unquote(aws_app_name)
+        config[CONF_SECTION][ConfigFile.STA_USERNAME] = sta_username
 
         base_directory = os.path.dirname(args.cli_config_path)
         if base_directory and not os.path.exists(base_directory):
@@ -373,9 +409,13 @@ def main():
     else:
         idpentryurl = "https://" + cloud_idp + "/auth/realms/" + tenant_reference_id + "/protocol/saml/clients/" + aws_app_name
 
-    print("KeyCloak AWS application URL: " + idpentryurl)
-    sas_user = None
+    print(f"{BColors.OKGREEN}KeyCloak AWS application URL: {BColors.ENDC}" + idpentryurl)
 
+    # sas_user: The name you have given to the AWS app in the Identity Provider
+    if not config.has_option(CONF_SECTION, ConfigFile.STA_USERNAME):
+        sas_user = None
+    else:
+        sas_user = config.get(CONF_SECTION, ConfigFile.STA_USERNAME)
 
     ##########################################################################
     # Debugging if you are having any major issues:
@@ -387,7 +427,7 @@ def main():
     print(f'''
     -----------------------------------------------------------------------------------------
     Welcome to MFA for AWS CLI using:{BColors.HEADER}
-    ___        __     _  _     _     _____            _          _     _                   
+     ___        __     _  _     _     _____            _          _     _                   
     / __| __ _ / _|___| \| |___| |_  |_   _| _ _  _ __| |_ ___ __| |   /_\  __ __ ___ ______
     \__ \/ _` |  _/ -_) .` / -_)  _|   | || '_| || (_-<  _/ -_) _` |  / _ \/ _/ _/ -_|_-<_-<
     |___/\__,_|_| \___|_|\_\___|\__|   |_||_|  \_,_/__/\__\___\__,_| /_/ \_\__\__\___/__/__/
@@ -422,8 +462,12 @@ def main():
 
                 if "sas_user" in name.lower() and value == '':
                     # In STA the username field is called "sas_user"
-                    # Prompt for STA username
-                    sas_user = input("Enter Username: ")
+                    if args.username:
+                        sas_user = args.username
+                    if not sas_user:
+                        sas_user = input("Enter Username: ")
+                    else:
+                        print(f'Username (auto-submit): {sas_user}')
                     payload[name] = sas_user
                 elif "sas_push" in name.lower():
                     sps_response = complete_push_login(value)
