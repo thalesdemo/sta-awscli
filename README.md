@@ -10,7 +10,7 @@ GriDsure support is experimental and requires "tesseract" v4.0 and above to be i
 
 ## Configuration
 
-On first execution, the script will collect the required information to create a configuration file (sta-awscli.config) that is stored in ~\.aws folder. It's possible to run the script with -c switch to specify an alternative location for the config file or --update-config to overwrite existing configurations.
+On first execution, the script will collect the required information to create a configuration file (sta-awscli.config) that is stored in ~\\.aws folder. It's possible to run the script with -c switch to specify an alternative location for the config file or --update-config to overwrite existing configurations.
 
 The configuration file includes:  
 
