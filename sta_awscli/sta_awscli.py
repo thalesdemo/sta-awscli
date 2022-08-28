@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 __title__ = "MFA for AWS CLI using SafeNet Trusted Access (STA)"
 __homepage__ = 'https://github.com/thalesdemo/sta-awscli'
-__version__ = '2.0.7'
+__version__ = '2.0.8'
 ##########################################################################
 # MFA for AWS CLI using SafeNet Trusted Access (STA)
 ##########################################################################
@@ -131,7 +131,8 @@ def setup_argparser():
             '-r', 
             dest='region',
             nargs='?',
-            const='',
+            const=True,
+            default=[],
             help='Specify any AWS region (without input checking)'
     )
     region_group.add_argument(
@@ -139,7 +140,6 @@ def setup_argparser():
             dest='region', 
             nargs='?',
             default=[],
-            const=True,
             type=str.lower,
             choices=aws_region_list,
             help='Specify AWS region (e.g. us-east-1)'
