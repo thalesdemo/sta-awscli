@@ -53,6 +53,6 @@ options:
   -u USERNAME, --username USERNAME
                         Specify your SafeNet Trusted Access Username
   -r [REGION]           Specify any AWS region (without input checking)
-  --region              Specify AWS region (e.g. us-east-1) with input checking
+  --region [REGION]     Specify AWS region (e.g. us-east-1)
 ```
 
