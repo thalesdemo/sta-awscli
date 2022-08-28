@@ -89,7 +89,8 @@ aws_region_list = [
 
 def setup_argparser():
     parser = argparse.ArgumentParser(
-                description=__title__, 
+                description="On first execution, the script will collect the required information to create a configuration file (sta-awscli.config) that is stored in ~\.aws folder. " + \
+                            "It's possible to run the script with -c switch to specify an alternative location for the config file or --update-config to overwrite existing configurations.", 
                 epilog=f"For more info, visit: {__homepage__}"
     )
 
