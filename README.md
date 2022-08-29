@@ -36,6 +36,8 @@ If the user has multiple tokens assigned, the user is aksed to provide an OTP, b
 
 After successful  authentication, if a user has a single role assigned, an Access Token is generated and stored in .aws\credentials file. If the user has multiple roles assigned, the user is presented with the list of available roles to select the desired role and an Access Token is generated and stored.
 
+## Switches
+
 ```
  $ sta-awscli -h                                   
 sta-awscli (version) MFA for AWS CLI using SafeNet Trusted Access (STA)
