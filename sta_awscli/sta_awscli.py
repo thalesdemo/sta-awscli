@@ -81,7 +81,7 @@ class ConfigFile:
 
 # Default choices for aws region
 aws_region_list = [
-        'eu-north-1', 'ap-south-1', 'eu-west-3', 'eu-west-2', 'eu-west-1', 'eu-central-1', 
+        'eu-north-1', 'ap-south-1', 'eu-west-3', 'eu-west-2', 'eu-west-1', 'eu-central-1',
         'ap-northeast-3', 'ap-northeast-2', 'ap-northeast-1', 'ap-east-1', 'ap-southeast-1', 'ap-southeast-2',
         'sa-east-1', 'ca-central-1', 'us-east-1', 'us-east-2', 'us-west-1', 'us-west-2',
 ]
@@ -93,7 +93,7 @@ aws_region_list = [
 def setup_argparser():
     parser = argparse.ArgumentParser(
                 description="On first execution, the script will collect the required information to create a configuration file (sta-awscli.config) that is stored in ~\.aws folder. " + \
-                            "It's possible to run the script with -c switch to specify an alternative location for the config file or --update-config to overwrite existing configurations.", 
+                            "It's possible to run the script with -c switch to specify an alternative location for the config file or --update-config to overwrite existing configurations.",
                 epilog=f"For more info, visit: {__homepage__}"
     )
 
@@ -101,21 +101,21 @@ def setup_argparser():
             '-v', '--version',
             action='version',
             version=f'{check_software_version()}'
-           
+
     )
 
     parser.add_argument(
             '-c', '--config',
             required=False,
-            dest='cli_config_path', 
+            dest='cli_config_path',
             default=os.path.join(HOME_DIR, '.aws', 'sta-awscli.conf'),
             help='Specify script configuration file path'
     )
 
     parser.add_argument(
-            '--update-config', 
+            '--update-config',
             required=False,
-            dest='update_config', 
+            dest='update_config',
             action='store_true',
             help='Force update sta-awscli configuration file'
     )
@@ -129,7 +129,7 @@ def setup_argparser():
 
     region_group = parser.add_mutually_exclusive_group(required=False)
     region_group.add_argument(
-            '-r', 
+            '-r',
             dest='region',
             nargs='?',
             default=[],
@@ -137,8 +137,8 @@ def setup_argparser():
             help='Specify any AWS region (without input checking)'
     )
     region_group.add_argument(
-            '--region', 
-            dest='region', 
+            '--region',
+            dest='region',
             nargs='?',
             default=[],
             const=True,
@@ -170,7 +170,7 @@ def check_software_version():
         update_available_message = \
             f"{BColors.OKGREEN}{delimiter('█')}\n     ⚠️    A new version of sta-awscli is now available! " + \
             f"(upgrade from {__version__} to {latest_version})\n\n" + \
-            f"\t  Simply use the pip package manager to update:\n\n\t  pip install --upgrade sta-awscli\n{delimiter('█')}{BColors.ENDC}"      
+            f"\t  Simply use the pip package manager to update:\n\n\t  pip install --upgrade sta-awscli\n{delimiter('█')}{BColors.ENDC}"
 
         no_update_available_message = \
             f'{BColors.OKCYAN}Checked updates, this version matches to the latest one available!{BColors.ENDC}'
@@ -220,9 +220,9 @@ def transform_image(b64img):
 
 def complete_grid_login(grid_data):
     import pytesseract
-    
+
     base64_grid_img = grid_data.split(',')[1]
-    img = transform_image(base64_grid_img) 
+    img = transform_image(base64_grid_img)
 
     custom_config = '--psm 6 -c tessedit_char_whitelist=0123456789'
     raw_text = pytesseract.image_to_string(img, lang='snum', config=custom_config)
@@ -242,7 +242,7 @@ def complete_push_login(sps_url):
         response = sps_session.post(sps_url, verify=True)
     except KeyboardInterrupt:
         return None
-    
+
     if response.ok:
         print('Push response OK')
         return ''.join(sps_url.split('/')[-1:]) # strip https://sps.us.safenetid.com/api/parkingspot/<code>
@@ -260,7 +260,7 @@ def region_completer(text, state):
 
 def input_aws_region():
     aws_region = ''
-    
+
     readline.parse_and_bind("tab: complete")
     readline.set_completer(region_completer) # turn on auto-complete for aws region
     readline.set_completer_delims('\n')
@@ -280,14 +280,14 @@ def input_aws_region():
 
 def is_tesseract_installed():
     try:
-        subprocess.call('tesseract', 
+        subprocess.call('tesseract',
                         stdout=subprocess.DEVNULL,
                         stderr=subprocess.STDOUT)
     except FileNotFoundError:
         print(f'{BColors.WARNING}Tesseract could not be found on this machine and is required for GridSure login.')
         print(f'Please read instructions at: https://tesseract-ocr.github.io/tessdoc/Installation.html{BColors.ENDC}')
         return False
-    
+
     return True
 
 
@@ -374,7 +374,7 @@ def main():
                     break
                 else:
                     print(f'{BColors.FAIL}Response not recognized - please provide correct response{BColors.ENDC}\n')
-           
+
         config[CONF_SECTION] = {}
         config[CONF_SECTION][ConfigFile.AWS_REGION] = aws_region
         config[CONF_SECTION][ConfigFile.KEYCLOAK_URL] = keycloak_url
@@ -455,14 +455,16 @@ def main():
     ##########################################################################
     # STA welcome message:
     print(f'''
-    -----------------------------------------------------------------------------------------
-    Welcome to MFA for AWS CLI using:{BColors.HEADER}
-     ___        __     _  _     _     _____            _          _     _                   
-    / __| __ _ / _|___| \| |___| |_  |_   _| _ _  _ __| |_ ___ __| |   /_\  __ __ ___ ______
-    \__ \/ _` |  _/ -_) .` / -_)  _|   | || '_| || (_-<  _/ -_) _` |  / _ \/ _/ _/ -_|_-<_-<
-    |___/\__,_|_| \___|_|\_\___|\__|   |_||_|  \_,_/__/\__\___\__,_| /_/ \_\__\__\___/__/__/
-    {BColors.ENDC}                                                                                         
-    =========================================================================================
+    ---------------------------------------------------------------------------
+    Welcome to MFA for AWS CLI using SafeNet Trusted Access:{BColors.HEADER}
+                     _                                        _ _
+                 ___| |_ __ _          __ ___      _____  ___| (_)
+                / __| __/ _` | _____  / _` \ \ /\ / / __|/ __| | |
+                \__ \ || (_| ||_____|| (_| |\ V  V /\__ \ (__| | |
+                |___/\__\__,_|        \__,_| \_/\_/ |___/\___|_|_|
+
+    {BColors.ENDC}
+    ===========================================================================
     ''')
 
     # Initiate session handler
@@ -547,15 +549,15 @@ def main():
                 else:
                     # Simply populate the parameter with the existing value (picks up hidden fields in the login form)
                     payload[name] = value
-                
+
 
             # note: wasn't required but strange to have kvp '':''
             if '' in payload:
                 payload.pop('')
             #print(payload)
-            
+
             idpauthformsubmiturl = login_form.get('action')
-            
+
             #print(idpauthformsubmiturl)
             # Performs the submission of the STA login form with the above post data
             response = session.post(idpauthformsubmiturl, data=payload, verify=sslverification)
