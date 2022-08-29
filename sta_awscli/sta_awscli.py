@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 __title__ = "MFA for AWS CLI using SafeNet Trusted Access (STA)"
 __homepage__ = 'https://github.com/thalesdemo/sta-awscli'
-__version__ = '2.0.8'
+__version__ = '2.0.9'
 ##########################################################################
 # MFA for AWS CLI using SafeNet Trusted Access (STA)
 ##########################################################################
-# Last updated on: 2022-08-27
+# Last updated on: 2022-08-29
 #
 # NOTE: This script was adapted from a script written by Quint Van Deman
 # published on the AWS Security Blog (https://amzn.to/2gT8IAZ). Notable
@@ -27,6 +27,7 @@ __version__ = '2.0.8'
 # DISCLAIMER: This script is provided "as-is" without any warranty of
 # any kind, either expressed or implied.
 # ************************************************************************
+from distutils.command.config import config
 import sys
 import boto3
 import requests
@@ -68,6 +69,7 @@ class BColors:
     WARNING = '\033[93m'
     FAIL = '\033[91m'
     ENDC = '\033[0m'
+    WHITE = '\033[97m'
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
@@ -157,23 +159,24 @@ def setup_argparser():
 
 def check_software_version():
     package='sta-awscli'
-    delimiter = lambda x : '\n' + str(x)*100 + '\n'
+    url = f'https://pypi.org/pypi/{package}/json'
+    author = '2022 - by Alex Basin, Gur Talmor & Cina Shaykhian'
+    delimiter = lambda x : '\n' + str(x)*80 + '\n'
 
-    print(package + ' (v' + __version__ + ') ' + __title__)
+    print(package + ' (v' + __version__ + ') ' + author)
 
-    #TODO: add exception handling
     try:
-        url = f'https://pypi.org/pypi/{package}/json'
         response = requests.get(url)
         latest_version = response.json()['info']['version']
 
-        update_available_message = \
-            f"{BColors.OKGREEN}{delimiter('█')}\n     ⚠️    A new version of sta-awscli is now available! " + \
-            f"(upgrade from {__version__} to {latest_version})\n\n" + \
-            f"\t  Simply use the pip package manager to update:\n\n\t  pip install --upgrade sta-awscli\n{delimiter('█')}{BColors.ENDC}"
+        update_available_message = f"""{BColors.OKGREEN}{delimiter('█')}
+ ⚠️  A new version of sta-awscli is now available! (upgrade from {__version__} to {latest_version})\n
+          Simply use the pip package manager to update:\n
+          pip install --upgrade sta-awscli
+        {delimiter('█')}{BColors.ENDC}"""
 
         no_update_available_message = \
-            f'{BColors.OKCYAN}Checked updates, this version matches to the latest one available!{BColors.ENDC}'
+            f'{BColors.OKCYAN}Check update: version matches the latest one available online!{BColors.ENDC}\n'
 
         if parse_version(latest_version) > parse_version(__version__):
             print(update_available_message)
@@ -182,7 +185,7 @@ def check_software_version():
 
     except (ConnectionError, KeyError):
         latest_version = None
-        print(f'{BColors.WARNING}WARNING: Could not fetch latest version online at: {url}{BColors.ENDC}')
+        print(f'{BColors.WARNING}[!] Could not fetch latest version status: {url}{BColors.ENDC}\n')
 
     return f'Project homepage: {__homepage__}'
 
@@ -227,10 +230,11 @@ def complete_grid_login(grid_data):
     custom_config = '--psm 6 -c tessedit_char_whitelist=0123456789'
     raw_text = pytesseract.image_to_string(img, lang='snum', config=custom_config)
 
-    print('\nGrIDsure Challenge:\n')
-    print(raw_text.replace(' ', '     ').replace('\n','\n\n'))
+    print(f'\nGridSure Challenge:\n')
+    spacing = '     '
+    print(spacing + raw_text.replace(' ', spacing).replace('\n','\n\n' + spacing))
 
-    pip = pwinput.pwinput(prompt="Enter PIP: ", mask="*")
+    pip = pwinput.pwinput(prompt=f"{BColors.WHITE}Enter PIP: {BColors.ENDC}", mask="*")
     return pip
 
 
@@ -266,13 +270,13 @@ def input_aws_region():
     readline.set_completer_delims('\n')
 
     while True:
-        aws_region = input('Enter AWS Region (e.g. us-east-1): ')
+        aws_region = input('\nEnter AWS Region (e.g. us-east-1): ')
         aws_regex = re.compile(r'[a-z]*-[a-z]*-[0-9]{1}')
 
         if re.match(aws_regex, aws_region):
             break
         else:
-            print(f'{BColors.FAIL}Response not recognized - please provide a valid AWS Region{BColors.ENDC}\n')
+            print(f'{BColors.FAIL}Response not recognized - please provide a valid AWS Region{BColors.WHITE}')
 
     readline.parse_and_bind('set disable-completion on')
 
@@ -291,30 +295,34 @@ def is_tesseract_installed():
     return True
 
 
-def init():
-    # If using Windows, init() will cause anything sent to stdout or stderr
-    # will have ANSI color codes converted to the Windows versions. Hooray!
-    # If you are already using an ANSI compliant shell, it won't do anything
-    colorama.init()
+def show_banner():
+    ##########################################################################
+    # STA welcome message:
+    print(f'''\
+--------------------------------------------------------------------------------
+          Welcome to MFA for AWS CLI using SafeNet Trusted Access!
+{BColors.HEADER}                 _                                        _ _ 
+             ___| |_ __ _          __ ___      _____  ___| (_)  ({__version__})
+            / __| __/ _` | _____  / _` \ \ /\ / / __|/ __| | |                
+            \__ \ || (_| ||_____|| (_| |\ V  V /\__ \ (__| | |
+            |___/\__\__,_|        \__,_| \_/\_/ |___/\___|_|_|
+{BColors.ENDC}
+================================================================================
+    ''')
 
 
-##########################################################################
-# Main function
-
-def main():
-    init()
-    args = setup_argparser()
+def load_configuration(args):
     config = configparser.ConfigParser()
 
     if not args.update_config and os.path.exists(args.cli_config_path):
         if not os.path.isfile(args.cli_config_path):
-            print('You must also include the configuration filename.')
+            print(f'{BColors.WARNING}Error: You must include the configuration filename.{BColors.ENDC}')
             sys.exit(1)
 
-        print(f'{BColors.OKGREEN}Config file found in: {BColors.ENDC}' + args.cli_config_path)
+        print(f'{BColors.OKGREEN}Loaded config: {BColors.WHITE}{BColors.BOLD}' + os.path.abspath(args.cli_config_path))
         config.read(args.cli_config_path)
     else:
-        print(f'{BColors.WARNING}Config file does not exist - prompting for configs{BColors.ENDC}\n')
+        print(f'{BColors.WARNING}Config file does not exist (or being updated) - prompting for configs{BColors.WHITE}')
 
         # aws region selector
         if args.region in aws_region_list:
@@ -324,36 +332,36 @@ def main():
 
         keycloak_url = ''
         while True:
-            keycloak_url = input('KeyCloak URL (without HTTP/HTTPS): ')
+            keycloak_url = input('\nKeycloak URL (without HTTP/HTTPS): ')
             if validators.domain(keycloak_url):
                 break
             else:
-                print(f'{BColors.FAIL}Response not recognized - please provide a valid URL{BColors.ENDC}\n')
+                print(f'{BColors.FAIL}Response not recognized - please provide a valid URL{BColors.ENDC}')
 
         is_keycloak_18_or_higher = ''
         while True:
-            is_keycloak_18_or_higher = input('Is KeyCloak version 18 or higher (y/n): ')
+            is_keycloak_18_or_higher = input('\nIs Keycloak version 18 or higher (y/n): ')
             if is_keycloak_18_or_higher.lower() == 'y' or is_keycloak_18_or_higher.lower() == 'n' or\
                     is_keycloak_18_or_higher.lower() == 'yes' or is_keycloak_18_or_higher.lower() == 'no':
                 break
             else:
-                print(f'{BColors.FAIL}Response not recognized - please provide correct response{BColors.ENDC}\n')
+                print(f'{BColors.FAIL}Response not recognized - please provide correct response{BColors.ENDC}')
 
         kc_tenant_id = ''
         while True:
-            kc_tenant_id = input('KeyCloak Realm Name: ')
+            kc_tenant_id = input('\nKeycloak Realm Name: ')
             if kc_tenant_id != '':
                 break
             else:
-                print(f'{BColors.FAIL}Response not recognized - tenant ID cannot be empty{BColors.ENDC}\n')
+                print(f'{BColors.FAIL}Response not recognized - tenant ID cannot be empty{BColors.ENDC}')
 
         aws_app_name = ''
         while True:
-            aws_app_name = input('AWS Application Name in KeyCloak: ')
+            aws_app_name = input('\nAWS Application Name in Keycloak: ')
             if aws_app_name != '':
                 break
             else:
-                print(f'{BColors.FAIL}Response not recognized - AWS App Name cannot be empty{BColors.ENDC}\n')
+                print(f'{BColors.FAIL}Response not recognized - AWS App Name cannot be empty{BColors.ENDC}')
 
         sta_username = ''
         if args.username:
@@ -390,8 +398,28 @@ def main():
         with open(args.cli_config_path, 'w') as filename:
             config.write(filename)
 
-        print(f"{BColors.OKGREEN}Config file created in: {BColors.ENDC}" + os.path.abspath(args.cli_config_path))
+        print(f"{BColors.OKGREEN}\nConfig file created: {BColors.ENDC}" + os.path.abspath(args.cli_config_path))
+        
+    return config
 
+
+def init():
+    # If using Windows, coloroma.init() will cause anything sent to stdout 
+    # or stderr to have ANSI color codes converted to the Windows versions.
+    # If you are already using an ANSI compliant shell, it won't do anything
+    colorama.init()
+    #print(colorama.ansi.clear_screen())
+    args = setup_argparser()
+    show_banner()
+    config = load_configuration(args)
+    return args, config
+
+
+##########################################################################
+# Main function
+
+def main():
+    args, config = init()
 
     # output format: The AWS CLI output format that will be configured in the
     # user profile (affects subsequent CLI calls)
@@ -422,7 +450,7 @@ def main():
     # EU hosted tenants and "sta.us.safenetid.com" for US hosted tenants
     cloud_idp = config.get(CONF_SECTION, ConfigFile.KEYCLOAK_URL)
 
-    # is_new_kc = input("Running KeyCloak 19+? (y/n) [n]: ")
+    # is_new_kc = input("Running Keycloak 18+? (y/n) [n]: ")
     is_new_kc = config.get(CONF_SECTION, ConfigFile.IS_KEYCLOAK_18_OR_HIGHER)
 
     # tenant_reference_id: The unique ID for your virtual server, found in the
@@ -439,7 +467,7 @@ def main():
     else:
         idpentryurl = "https://" + cloud_idp + "/auth/realms/" + tenant_reference_id + "/protocol/saml/clients/" + aws_app_name
 
-    print(f"{BColors.OKGREEN}KeyCloak AWS application URL: {BColors.ENDC}" + idpentryurl)
+    print(f"{BColors.ENDC}{BColors.OKGREEN}\nKeycloak AWS app: {BColors.WHITE}{BColors.BOLD}{idpentryurl}{BColors.ENDC}")
 
     # sas_user: The name you have given to the AWS app in the Identity Provider
     if not config.has_option(CONF_SECTION, ConfigFile.STA_USERNAME):
@@ -451,20 +479,7 @@ def main():
     # Debugging if you are having any major issues:
     # logging.basicConfig(level=logging.DEBUG)
 
-
-    ##########################################################################
-    # STA welcome message:
-    print(f'''
--------------------------------------------------------------------------------
-           Welcome to MFA for AWS CLI using SafeNet Trusted Access:
-{BColors.HEADER}                   _                                        _ _
-               ___| |_ __ _          __ ___      _____  ___| (_)
-              / __| __/ _` | _____  / _` \ \ /\ / / __|/ __| | |
-              \__ \ || (_| ||_____|| (_| |\ V  V /\__ \ (__| | |
-              |___/\__\__,_|        \__,_| \_/\_/ |___/\___|_|_|
-{BColors.ENDC}
-===============================================================================
-    ''')
+    print(f'{BColors.WHITE}')
     # Initiate session handler
     session = requests.Session()
 
@@ -497,7 +512,7 @@ def main():
                     if not sas_user:
                         sas_user = input("Enter Username: ")
                     else:
-                        print(f'Username (auto-submit): {sas_user}')
+                        print(f'Username {BColors.OKGREEN}(auto-submit): {BColors.WHITE}{sas_user}')
                     payload[name] = sas_user
                 elif "sas_push" in name.lower():
                     sps_response = complete_push_login(value)
@@ -514,7 +529,7 @@ def main():
 
                     print('\n')
                 elif "password" in name.lower():
-                    # In case Password field also exists in the page, which is for "AD Password + OTP" KeyCloak flow
+                    # In case Password field also exists in the page, which is for "AD Password + OTP" Keycloak flow
                     pw = pwinput.pwinput(prompt="Enter Password: ", mask="*")
                     payload[name] = pw
                 elif "sas_response" in name:
@@ -537,10 +552,10 @@ def main():
                         password = complete_grid_login(grid_image.get('src'))
 
                     elif authentication_type != 'OTP':
-                        password = pwinput.pwinput(prompt="Enter Password: ", mask="*")
+                        password = pwinput.pwinput(prompt="\nEnter Password: ", mask="*")
 
                     else:
-                        print("Enter OTP:", end=' ')
+                        print("\nEnter OTP:", end=' ')
                         password = input()
 
                     payload[name] = password
@@ -616,11 +631,11 @@ def main():
     if len(awsroles) > 1:
         #print(awsroles) For debug purposes
         i = 0
-        print("Please choose the role you would like to assume:")
+        print(f"{BColors.OKGREEN}Please choose the role you would like to assume:{BColors.WHITE}\n")
         for awsrole in awsroles:
             print('[', i, ']: ', awsrole.split(',')[0])
             i += 1
-        print("Selection: ", end=' ')
+        print(f"\nSelection: {BColors.ENDC}", end=' ')
         selectedroleindex = input()
 
         # Basic sanity check of input
@@ -683,11 +698,12 @@ def main():
     local_time = expiry_dt_in_utc.astimezone(to_zone).strftime("%m/%d/%Y, %H:%M:%S")
 
     # Provide some user feedback:
+    print(f'{BColors.OKGREEN}{BColors.BOLD}')
     print('Great job! You have now obtained temporary credentials for AWS CLI')
-    print('NOTE: These credentials will expire at {0}.'.format(local_time))
+    print(f'NOTE: These credentials will expire at {local_time}.{BColors.ENDC}{BColors.WHITE}')
     print('Simply run the script again to refresh credentials on expiry.')
     print('You can use the above credentials to connect using AWS CLI. For example:')
-    print(f'aws --profile {sas_user} ec2 describe-instances --region={region}\n')
+    print(f'aws --profile {sas_user} ec2 describe-instances --region={region}')
 
 
 if __name__ == "__main__":
