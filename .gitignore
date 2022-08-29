@@ -152,3 +152,5 @@ cython_debug/
 #.idea/
 sta-awscli.conf
 .DS_Store
+.chglog/config.yml
+.chglog/CHANGELOG.tpl.md
