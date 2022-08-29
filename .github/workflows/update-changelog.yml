@@ -19,7 +19,7 @@ jobs:
         uses: Requarks/changelog-action@v1
         with:
           token: ${{ github.token }}
-          tag: ${{ github.ref_name }}
+          tag: v2.0.0
 
       - name: Create Release
         uses: ncipollo/release-action@v1
