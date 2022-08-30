@@ -1,10 +1,11 @@
 
 <a name="v2.0.10"></a>
-## [v2.0.10](https://github.com/thalesdemo/sta-awscli/compare/v2.0.9...v2.0.10) (2022-08-29)
+## [v2.0.10](https://github.com/thalesdemo/sta-awscli/compare/v2.0.9...v2.0.10) (2022-08-30)
 
-### Create
+### Improve
 
-* Create CHANGELOG.md
+* Automatically prompt to install tesseract for Windows and Mac
+* Tesseract for Windows (and training data) can be retrieved directly from the Github repo
 
 <a name="v2.0.9"></a>
 ## [v2.0.9](https://github.com/thalesdemo/sta-awscli/compare/v2.0.8...v2.0.9) (2022-08-29)
