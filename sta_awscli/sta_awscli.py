@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 __title__ = "MFA for AWS CLI using SafeNet Trusted Access (STA)"
 __homepage__ = 'https://github.com/thalesdemo/sta-awscli'
-__version__ = '2.0.9'
+__version__ = '2.0.10'
 ##########################################################################
 # MFA for AWS CLI using SafeNet Trusted Access (STA)
 ##########################################################################
@@ -48,6 +48,7 @@ import subprocess
 from packaging.version import parse as parse_version
 from requests.exceptions import ConnectionError
 import colorama
+import wget
 
 try:
     import readline
@@ -87,6 +88,100 @@ aws_region_list = [
         'ap-northeast-3', 'ap-northeast-2', 'ap-northeast-1', 'ap-east-1', 'ap-southeast-1', 'ap-southeast-2',
         'sa-east-1', 'ca-central-1', 'us-east-1', 'us-east-2', 'us-west-1', 'us-west-2',
 ]
+
+# OCR dependency for GrIDsure (Tesseract-OCR)
+class OCR:
+    PATH = None
+    OS = sys.platform
+    CONFIG = '--psm 6 -c tessedit_char_whitelist=0123456789'
+
+    def init():
+        dirname = OCR.get_script_dir()
+        filename = 'tesseract.exe' if OCR.is_windows() else 'tesseract'
+        script_path = os.path.join(dirname, filename)
+
+        if OCR.is_installed(filename):
+            # Found Tesseract installed from system path or current working directory
+            OCR.PATH = filename
+
+        elif OCR.is_windows():
+            if OCR.is_installed(script_path) or OCR.install_windows():
+                # Found Tesseract under script path: {script_path}
+                OCR.PATH = script_path
+                lang_file_path = os.path.join(dirname)
+                OCR.CONFIG += f' --tessdata-dir "{lang_file_path}"'
+            else:
+                print(f'{BColors.WARNING} Failed to meet dependency - tesseract.exe not installed + auto-install failed or refused!{BColors.ENDC}\n')
+                return False
+
+        elif OCR.is_mac():
+            if OCR.install_mac():
+                OCR.PATH = filename
+            else:
+                return False
+
+        else:
+            OCR.warning()
+            OCR.PATH = None
+            return False
+
+        return True
+        
+    def warning():
+        print(f'\n{BColors.WARNING}Tesseract could not be found on this machine and is required for GridSure login.')
+        print(f'Please read instructions at: https://tesseract-ocr.github.io/tessdoc/Installation.html{BColors.ENDC}')
+    
+    def get_script_dir():
+        return os.path.abspath(os.path.dirname(__file__))
+
+    def is_windows():
+        return OCR.OS == 'win32'
+
+    def is_mac():
+        return OCR.OS == 'darwin'
+
+    def is_linux():
+        return OCR.OS == 'linux' or OCR.OS == 'linux2'
+
+    def is_installed(path):
+        try:
+            subprocess.call(path,
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.STDOUT)
+        except FileNotFoundError:
+            return False
+
+        return True
+
+    def install_mac():
+        OCR.warning()
+
+        while True:
+            choice = input(f'\n{BColors.WHITE}Install tesseract dependency using brew? (y/n) ')
+            if(choice == 'n' or choice == 'no'):
+                return False
+            if(choice == 'y' or choice == 'yes'):
+                return os.system('brew install tesseract') == 0
+            else:
+                print('Response not recognized - please provide correct response')
+
+    def install_windows():
+        OCR.warning()
+        base_url = f'{__homepage__}/raw/main/extras'
+        files = ('tesseract.exe', 'snum.traineddata')
+
+        while True:
+            choice = input(f'\n{BColors.WHITE}Install tesseract dependencies from our repository? (y/n) ')
+            if(choice == 'n' or choice == 'no'):
+                return False
+            if(choice == 'y' or choice == 'yes'):
+                for file in files:
+                    url = base_url + '/' + file
+                    wget.download(url, out = OCR.get_script_dir())
+                    print(f' {file}')
+                return True
+            else:
+                print('Response not recognized - please provide correct response')
 
 
 ##########################################################################
@@ -221,21 +316,23 @@ def transform_image(b64img):
     return result
 
 
+def print_grid_challenge(raw_text):
+    print('\nGridSure Challenge:\n')
+    spacing = ' ' * 5
+    print(spacing + raw_text.replace(' ', spacing).replace('\n','\n\n' + spacing))
+
+
 def complete_grid_login(grid_data):
     import pytesseract
-
+    
     base64_grid_img = grid_data.split(',')[1]
     img = transform_image(base64_grid_img)
 
-    custom_config = '--psm 6 -c tessedit_char_whitelist=0123456789'
-    raw_text = pytesseract.image_to_string(img, lang='snum', config=custom_config)
-
-    print(f'\nGridSure Challenge:\n')
-    spacing = '     '
-    print(spacing + raw_text.replace(' ', spacing).replace('\n','\n\n' + spacing))
-
-    pip = pwinput.pwinput(prompt=f"{BColors.WHITE}Enter PIP: {BColors.ENDC}", mask="*")
-    return pip
+    pytesseract.pytesseract.tesseract_cmd = OCR.PATH
+    raw_text = pytesseract.image_to_string(img, lang='snum', config=OCR.CONFIG)
+    
+    print_grid_challenge(raw_text)
+    return pwinput.pwinput(prompt=f"{BColors.WHITE}Enter PIP:{BColors.ENDC} ")
 
 
 def complete_push_login(sps_url):
@@ -281,18 +378,6 @@ def input_aws_region():
     readline.parse_and_bind('set disable-completion on')
 
     return aws_region
-
-def is_tesseract_installed():
-    try:
-        subprocess.call('tesseract',
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.STDOUT)
-    except FileNotFoundError:
-        print(f'{BColors.WARNING}Tesseract could not be found on this machine and is required for GridSure login.')
-        print(f'Please read instructions at: https://tesseract-ocr.github.io/tessdoc/Installation.html{BColors.ENDC}')
-        return False
-
-    return True
 
 
 def show_banner():
@@ -538,10 +623,10 @@ def main():
 
                     grid_image = soup.find(id='GRIDSUREImage')
                     if grid_image:
-                        if is_tesseract_installed():
+                        if OCR.init():
                             authentication_type = 'GRID'
                         else:
-                            print(f'{BColors.FAIL}A grid image was detected on the page but could not be rendered due to missing dependencies.{BColors.ENDC}')
+                            print(f'\n{BColors.FAIL}A grid image was detected on the page but could not be rendered due to missing dependencies.{BColors.ENDC}')
 
                     for inputtag in login_form.find_all(re.compile('(label)')):
                         # Solving for Policy in STA with "AD Password + OTP"
@@ -557,6 +642,7 @@ def main():
                     else:
                         print("\nEnter OTP:", end=' ')
                         password = input()
+                        print('')
 
                     payload[name] = password
                 else:
