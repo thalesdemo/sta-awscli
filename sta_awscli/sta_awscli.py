@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 __title__ = "MFA for AWS CLI using SafeNet Trusted Access (STA)"
 __homepage__ = 'https://github.com/thalesdemo/sta-awscli'
-__version__ = '2.0.14'
+__version__ = '2.0.15'
 ##########################################################################
 # MFA for AWS CLI using SafeNet Trusted Access (STA)
 ##########################################################################
@@ -84,12 +84,12 @@ class ConfigFile:
 class GridSureExtras:
     LINUX_GLIBC_FALLBACK_VERSION = '2.27' # is_old_glibc_installed == true if installed version strictly less
     FALLBACK_TESSERACT = \
-    { 
+    {
         'name':'tesseract-4.1.3-x86_64.GLIBC_2.22.AppImage',
         'url': 'https://github.com/AlexanderP/tesseract-appimage/releases/download/v4.1.3/tesseract-4.1.3-x86_64.GLIBC_2.22.AppImage',
     }
     LATEST_TESSERACT = \
-    { 
+    {
         'name': 'tesseract-5.2.0-x86_64.AppImage',
         'url': 'https://github.com/AlexanderP/tesseract-appimage/releases/download/v5.2.0/tesseract-5.2.0-x86_64.AppImage',
     }
@@ -159,11 +159,11 @@ class OCR:
             return False
 
         return True
-        
+
     def warning():
         print(f'\n{BColors.WARNING}Tesseract could not be found on this machine and is required for GridSure login.')
         print(f'Please read instructions at: https://tesseract-ocr.github.io/tessdoc/Installation.html{BColors.ENDC}')
-    
+
     def get_script_dir():
         return os.path.abspath(os.path.dirname(__file__))
 
@@ -223,12 +223,12 @@ class OCR:
         except FileNotFoundError:
             print('\nERROR: Could not find file to set permissions: %s' % filename)
             return False
-        
+
         except PermissionError:
             while True:
                 print(f'\n{BColors.WARNING}Not enough permissions to make the {filename} executable.')
                 choice = input(f'Try using sudo? (y/n) {BColors.WHITE}')
-                
+
                 if(choice == 'n' or choice == 'no'):
                     return False
 
@@ -245,7 +245,7 @@ class OCR:
             filename = ''.join(url.split('/')[-1:])
             filepath = os.path.join(path, filename)
             if os.path.exists(filepath):
-                while True:                
+                while True:
                     print(f'\n{BColors.WARNING}File already exist: {filepath}.')
                     choice = input(f'\n{BColors.WHITE}Overwrite? (y/n) ')
                     if(choice == 'n' or choice == 'no'):
@@ -261,7 +261,7 @@ class OCR:
             else:
                 print(f'\nDownloading {url} to {path}:')
                 wget.download(url, out=path)
-           
+
 
     def install_linux():
         OCR.warning()
@@ -269,7 +269,7 @@ class OCR:
         appimage_url = appimage['url']
         appimage_package_name = appimage['name']
         language_file_url = GridSureExtras.TESSERACT_LANGFILE['url']
-        urls = ( 
+        urls = (
                 appimage_url,
                 language_file_url
         )
@@ -287,7 +287,7 @@ class OCR:
                     while True:
                         print(f'\n{BColors.WARNING}Not enough permissions to save files to this path: {dirname}.')
                         choice = input(f'\n{BColors.WHITE}Try using sudo? (y/n) ')
-                        
+
                         if(choice == 'n' or choice == 'no'):
                             return False
 
@@ -305,10 +305,10 @@ class OCR:
                             print('Response not recognized - please provide correct response')
 
                 if OCR.set_file_permission(ocr_path):
-                    return True                       
-            else: 
+                    return True
+            else:
                 print('Response not recognized - please provide correct response')
- 
+
     def install_mac():
         OCR.warning()
         while True:
@@ -482,14 +482,14 @@ def print_grid_challenge(raw_text):
 
 def complete_grid_login(grid_data):
     import pytesseract
-    
+
     base64_grid_img = grid_data.split(',')[1]
     img = transform_image(base64_grid_img)
 
     pytesseract.pytesseract.tesseract_cmd = OCR.PATH
     raw_text = pytesseract.image_to_string(
-                    img, 
-                    lang=GridSureExtras.TESSERACT_LANGFILE['name'], 
+                    img,
+                    lang=GridSureExtras.TESSERACT_LANGFILE['name'],
                     config=OCR.CONFIG
     )
 
@@ -548,9 +548,9 @@ def show_banner():
     print(f'''\
 --------------------------------------------------------------------------------
           Welcome to MFA for AWS CLI using SafeNet Trusted Access!
-{BColors.HEADER}                 _                                        _ _ 
+{BColors.HEADER}                 _                                        _ _
              ___| |_ __ _          __ ___      _____  ___| (_)  ({__version__})
-            / __| __/ _` | _____  / _` \ \ /\ / / __|/ __| | |                
+            / __| __/ _` | _____  / _` \ \ /\ / / __|/ __| | |
             \__ \ || (_| ||_____|| (_| |\ V  V /\__ \ (__| | |
             |___/\__\__,_|        \__,_| \_/\_/ |___/\___|_|_|
 {BColors.ENDC}
@@ -646,12 +646,12 @@ def load_configuration(args):
             config.write(filename)
 
         print(f"{BColors.OKGREEN}\nConfig file created: {BColors.ENDC}" + os.path.abspath(args.cli_config_path))
-        
+
     return config
 
 
 def init():
-    # If using Windows, coloroma.init() will cause anything sent to stdout 
+    # If using Windows, coloroma.init() will cause anything sent to stdout
     # or stderr to have ANSI color codes converted to the Windows versions.
     # If you are already using an ANSI compliant shell, it won't do anything
     colorama.init()
