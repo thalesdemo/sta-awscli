@@ -47,6 +47,8 @@ pyreadline3 = "3.4.1"
 colorama = "0.4.5"
 wget = "3.2"
 maskpass = "0.3.6"
+scikit-build = "0.15.0"
+testresources = "2.0.1"
 
 
 
