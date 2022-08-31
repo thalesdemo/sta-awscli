@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 __title__ = "MFA for AWS CLI using SafeNet Trusted Access (STA)"
 __homepage__ = 'https://github.com/thalesdemo/sta-awscli'
-__version__ = '2.0.10'
+__version__ = '2.0.11'
 ##########################################################################
 # MFA for AWS CLI using SafeNet Trusted Access (STA)
 ##########################################################################
@@ -27,7 +27,6 @@ __version__ = '2.0.10'
 # DISCLAIMER: This script is provided "as-is" without any warranty of
 # any kind, either expressed or implied.
 # ************************************************************************
-from distutils.command.config import config
 import sys
 import boto3
 import requests
@@ -82,6 +81,29 @@ class ConfigFile:
     AWS_APP_NAME = 'aws_app_name'
     STA_USERNAME = 'sta_username'
 
+class GridSureExtras:
+    LINUX_GLIBC_FALLBACK_VERSION = '2.27' # is_old_glibc_installed == true if installed version strictly less
+    FALLBACK_TESSERACT = \
+    { 
+        'name':'tesseract-4.1.3-x86_64.GLIBC_2.22.AppImage',
+        'url': 'https://github.com/AlexanderP/tesseract-appimage/releases/download/v4.1.3/tesseract-4.1.3-x86_64.GLIBC_2.22.AppImage',
+    }
+    LATEST_TESSERACT = \
+    { 
+        'name': 'tesseract-5.2.0-x86_64.AppImage',
+        'url': 'https://github.com/AlexanderP/tesseract-appimage/releases/download/v5.2.0/tesseract-5.2.0-x86_64.AppImage',
+    }
+    TESSERACT_LANGFILE = \
+    {
+        'name:': 'snum',
+        'url': f'{__homepage__}/raw/main/extras/snum.traineddata',
+    }
+    TESSERACT_WINDOWS = \
+    {
+        'name': 'tesseract.exe',
+        'url': f'{__homepage__}/raw/main/extras/tesseract.exe'
+    }
+
 # Default choices for aws region
 aws_region_list = [
         'eu-north-1', 'ap-south-1', 'eu-west-3', 'eu-west-2', 'eu-west-1', 'eu-central-1',
@@ -106,9 +128,9 @@ class OCR:
 
         elif OCR.is_windows():
             if OCR.is_installed(script_path) or OCR.install_windows():
-                # Found Tesseract under script path: {script_path}
+                # Found Tesseract under script path
                 OCR.PATH = script_path
-                lang_file_path = os.path.join(dirname)
+                lang_file_path = dirname
                 OCR.CONFIG += f' --tessdata-dir "{lang_file_path}"'
             else:
                 print(f'{BColors.WARNING} Failed to meet dependency - tesseract.exe not installed + auto-install failed or refused!{BColors.ENDC}\n')
@@ -117,6 +139,16 @@ class OCR:
         elif OCR.is_mac():
             if OCR.install_mac():
                 OCR.PATH = filename
+            else:
+                return False
+
+        elif OCR.is_linux():
+            ocr_path = OCR.get_ocr_path()
+            if OCR.is_installed(ocr_path) or OCR.install_linux():
+                # found AppImage in script directory
+                lang_file_path = dirname
+                OCR.PATH = ocr_path
+                OCR.CONFIG += f' --tessdata-dir "{lang_file_path}"'
             else:
                 return False
 
@@ -153,6 +185,111 @@ class OCR:
 
         return True
 
+    def get_ocr_path():
+        dirname = OCR.get_script_dir()
+
+        if OCR.is_old_glibc_installed():
+            appimage_package_name = GridSureExtras.FALLBACK_TESSERACT['name']
+        else:
+            appimage_package_name = GridSureExtras.LATEST_TESSERACT['name']
+
+        return os.path.join(dirname, appimage_package_name)
+
+    def is_old_glibc_installed(fallback_version = GridSureExtras.LINUX_GLIBC_FALLBACK_VERSION):
+        command = 'ldd --version 2>&1 | head -n 1'
+        output = subprocess.getoutput(command)
+
+        glibc_version = ''.join(re.findall('GLIBC ([\d]+\.[\d]+)', output))
+
+        if parse_version(glibc_version) < parse_version(fallback_version):
+            return True
+        else:
+            return False
+
+    def appimage_picker():
+        if OCR.is_old_glibc_installed():
+            return GridSureExtras.FALLBACK_TESSERACT
+        else:
+            return GridSureExtras.LATEST_TESSERACT
+
+    def set_file_permission(filename):
+        try:
+            current_permissions = os.stat(filename).st_mode
+            print('\nSetting file permission (a+x): %s' % filename)
+            os.chmod(filename, current_permissions | 0o111) # chmod a+x
+            return True
+
+        except FileNotFoundError:
+            print('\nERROR: Could not find file to set permissions: %s' % filename)
+            return False
+        
+        except PermissionError:
+            while True:
+                print(f'\n{BColors.WARNING}Not enough permissions to make the {filename} executable.')
+                choice = input(f'Try using sudo? (y/n) {BColors.WHITE}')
+                
+                if(choice == 'n' or choice == 'no'):
+                    return False
+
+                if(choice == 'y' or choice == 'yes'):
+                    rc = os.system(f'sudo chmod a+x {filename}')
+                    if not rc:
+                        print('Successfully updated file permission (a+x) for: %s !' % filename)
+                        return True
+                else:
+                    print('Response not recognized - please provide correct response')
+
+    def install_linux():
+        OCR.warning()
+
+        appimage = OCR.appimage_picker()
+        appimage_url = appimage['url']
+        appimage_package_name = appimage['name']
+        language_file_url = GridSureExtras.TESSERACT_LANGFILE['url']
+
+        urls = ( appimage_url,
+                 language_file_url
+        )
+
+        dirname = OCR.get_script_dir()
+
+        while True:
+            choice = input(f'\n{BColors.WHITE}Install tesseract dependency from AppImage repository? (y/n) ')
+            if(choice == 'n' or choice == 'no'):
+                return False
+            if(choice == 'y' or choice == 'yes'):
+                try:
+                    for url in urls:
+                        print(f'\nDownloading {url} to {dirname}:')
+                        wget.download(url, out = dirname)  
+                    
+                except PermissionError:
+                    while True:
+                        print(f'\n{BColors.WARNING}Not enough permissions to save files to this path: {dirname}.')
+                        choice = input(f'\n{BColors.WHITE}Try using sudo? (y/n) ')
+                        
+                        if(choice == 'n' or choice == 'no'):
+                            return False
+
+                        if(choice == 'y' or choice == 'yes'):
+                            for url in urls:
+                                print(f'\n[SUDO] Downloading {url} to {dirname}:')
+                                rc = os.system(f'sudo wget {url} -P {dirname}')
+                                if not rc:
+                                    print('Successfully saved file!')
+                                else:
+                                    print('Error during download of %s...' % url)
+                                    return False
+                            break
+                        else:
+                            print('Response not recognized - please provide correct response')
+
+                ocr_path = OCR.get_script_dir() + '/' + appimage_package_name
+                if OCR.set_file_permission(OCR.get_script_dir() + '/' + appimage_package_name):
+                    return ocr_path                       
+            else:
+                print('Response not recognized - please provide correct response')
+ 
     def install_mac():
         OCR.warning()
 
@@ -167,18 +304,19 @@ class OCR:
 
     def install_windows():
         OCR.warning()
-        base_url = f'{__homepage__}/raw/main/extras'
-        files = ('tesseract.exe', 'snum.traineddata')
-
+        urls = (
+                GridSureExtras.TESSERACT_LANGFILE['url'],
+                GridSureExtras.TESSERACT_WINDOWS['url']
+        )
+        dirname = OCR.get_script_dir()
         while True:
             choice = input(f'\n{BColors.WHITE}Install tesseract dependencies from our repository? (y/n) ')
             if(choice == 'n' or choice == 'no'):
                 return False
             if(choice == 'y' or choice == 'yes'):
-                for file in files:
-                    url = base_url + '/' + file
-                    wget.download(url, out = OCR.get_script_dir())
-                    print(f' {file}')
+                for url in urls:
+                    print(f'\nDownloading {url} to {dirname} ...')
+                    wget.download(url, out = dirname)
                 return True
             else:
                 print('Response not recognized - please provide correct response')
@@ -317,6 +455,9 @@ def transform_image(b64img):
 
 
 def print_grid_challenge(raw_text):
+    if not raw_text.endswith('\n'): # tmp fix spacing / for linux
+        raw_text += '\n'
+
     print('\nGridSure Challenge:\n')
     spacing = ' ' * 5
     print(spacing + raw_text.replace(' ', spacing).replace('\n','\n\n' + spacing))
@@ -454,12 +595,12 @@ def load_configuration(args):
         else:
             save_username = ''
             while True:
-                save_username = input('Do you want to save the STA username (y/n): ')
+                save_username = input('\nDo you want to save the STA username (y/n): ')
                 if save_username.lower() == 'n' or save_username.lower() == 'no':
                     break
                 elif save_username.lower() == 'y' or save_username.lower() == 'yes':
                     while True:
-                        sta_username = input('Enter Username: ')
+                        sta_username = input('\nEnter Username: ')
                         if sta_username != '':
                             break
                         else:

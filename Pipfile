@@ -16,6 +16,8 @@ argcomplete = "*"
 packaging = "*"
 colorama = "*"
 pyreadline3 = "*"
+wget = "*"
+urllib3 = "*"
 
 [dev-packages]
 
