@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "sta-awscli"
-version = "2.0.11"
+version = "2.0.12"
 authors = ["Gur Talmor, Cina Shaykhian and Alex Basin"]
 description = "MFA for AWS CLI using SafeNet Trusted Access (STA)"
 readme = "README.md"
@@ -19,7 +19,7 @@ classifiers = [
 
 [tool.poetry.dependencies]
 
-python = ">=3.7, >=3.8, <4"
+python = ">=3.7, >=3.8, >=3.9, <4"
 beautifulsoup4 = "4.11.1"
 boto3 = "1.24.59"
 botocore = "1.27.59"
@@ -33,7 +33,6 @@ numpy = "1.23.2"
 opencv-python = "4.6.0.66"
 packaging = "21.3"
 pillow = "9.2.0"
-pwinput = "1.0.2"
 pyparsing = "3.0.9"
 pytesseract = "0.3.10"
 python-dateutil = "2.8.2"
@@ -47,6 +46,8 @@ argcomplete = "2.0.0"
 pyreadline3 = "3.4.1"
 colorama = "0.4.5"
 wget = "3.2"
+maskpass = "0.3.6"
+
 
 
 [tool.poetry.scripts]

@@ -8,7 +8,6 @@ boto3 = "*"
 requests = "*"
 bs4 = "*"
 validators = "*"
-pwinput = "*"
 pytesseract = "*"
 opencv-python = "*"
 numpy = "*"
@@ -18,6 +17,7 @@ colorama = "*"
 pyreadline3 = "*"
 wget = "*"
 urllib3 = "*"
+maskpass = "*"
 
 [dev-packages]
 

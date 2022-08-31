@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 __title__ = "MFA for AWS CLI using SafeNet Trusted Access (STA)"
 __homepage__ = 'https://github.com/thalesdemo/sta-awscli'
-__version__ = '2.0.11'
+__version__ = '2.0.12'
 ##########################################################################
 # MFA for AWS CLI using SafeNet Trusted Access (STA)
 ##########################################################################
-# Last updated on: 2022-08-29
+# Last updated on: 2022-08-30
 #
 # NOTE: This script was adapted from a script written by Quint Van Deman
 # published on the AWS Security Blog (https://amzn.to/2gT8IAZ). Notable
@@ -38,7 +38,6 @@ from bs4 import BeautifulSoup
 import os.path
 from dateutil import tz
 import validators
-import pwinput
 import numpy
 import argparse
 import argcomplete
@@ -48,6 +47,7 @@ from packaging.version import parse as parse_version
 from requests.exceptions import ConnectionError
 import colorama
 import wget
+import maskpass
 
 try:
     import readline
@@ -95,7 +95,7 @@ class GridSureExtras:
     }
     TESSERACT_LANGFILE = \
     {
-        'name:': 'snum',
+        'name': 'snum',
         'url': f'{__homepage__}/raw/main/extras/snum.traineddata',
     }
     TESSERACT_WINDOWS = \
@@ -125,6 +125,7 @@ class OCR:
         if OCR.is_installed(filename):
             # Found Tesseract installed from system path or current working directory
             OCR.PATH = filename
+            #TODO: Better handling in case 'snum' is not on the machine
 
         elif OCR.is_windows():
             if OCR.is_installed(script_path) or OCR.install_windows():
@@ -239,19 +240,41 @@ class OCR:
                 else:
                     print('Response not recognized - please provide correct response')
 
+    def download(urls, path):
+        for url in urls:
+            filename = ''.join(url.split('/')[-1:])
+            filepath = os.path.join(path, filename)
+            if os.path.exists(filepath):
+                while True:                
+                    print(f'\n{BColors.WARNING}File already exist: {filepath}.')
+                    choice = input(f'\n{BColors.WHITE}Overwrite? (y/n) ')
+                    if(choice == 'n' or choice == 'no'):
+                        break
+                    if(choice == 'y' or choice == 'yes'):
+                        print(f'\nRemoving old file: {filepath}')
+                        os.remove(filepath)
+                        print(f'\nDownloading {url} to {path}:')
+                        wget.download(url, out=path)
+                        break
+                    else:
+                        print('Response not recognized - please provide correct response')
+            else:
+                print(f'\nDownloading {url} to {path}:')
+                wget.download(url, out=path)
+           
+
     def install_linux():
         OCR.warning()
-
         appimage = OCR.appimage_picker()
         appimage_url = appimage['url']
         appimage_package_name = appimage['name']
         language_file_url = GridSureExtras.TESSERACT_LANGFILE['url']
-
-        urls = ( appimage_url,
-                 language_file_url
+        urls = ( 
+                appimage_url,
+                language_file_url
         )
-
         dirname = OCR.get_script_dir()
+        ocr_path = os.path.join(dirname, appimage_package_name)
 
         while True:
             choice = input(f'\n{BColors.WHITE}Install tesseract dependency from AppImage repository? (y/n) ')
@@ -259,10 +282,7 @@ class OCR:
                 return False
             if(choice == 'y' or choice == 'yes'):
                 try:
-                    for url in urls:
-                        print(f'\nDownloading {url} to {dirname}:')
-                        wget.download(url, out = dirname)  
-                    
+                    OCR.download(urls, dirname)
                 except PermissionError:
                     while True:
                         print(f'\n{BColors.WARNING}Not enough permissions to save files to this path: {dirname}.')
@@ -284,15 +304,13 @@ class OCR:
                         else:
                             print('Response not recognized - please provide correct response')
 
-                ocr_path = OCR.get_script_dir() + '/' + appimage_package_name
-                if OCR.set_file_permission(OCR.get_script_dir() + '/' + appimage_package_name):
-                    return ocr_path                       
-            else:
+                if OCR.set_file_permission(ocr_path):
+                    return True                       
+            else: 
                 print('Response not recognized - please provide correct response')
  
     def install_mac():
         OCR.warning()
-
         while True:
             choice = input(f'\n{BColors.WHITE}Install tesseract dependency using brew? (y/n) ')
             if(choice == 'n' or choice == 'no'):
@@ -309,14 +327,13 @@ class OCR:
                 GridSureExtras.TESSERACT_WINDOWS['url']
         )
         dirname = OCR.get_script_dir()
+
         while True:
             choice = input(f'\n{BColors.WHITE}Install tesseract dependencies from our repository? (y/n) ')
             if(choice == 'n' or choice == 'no'):
                 return False
             if(choice == 'y' or choice == 'yes'):
-                for url in urls:
-                    print(f'\nDownloading {url} to {dirname} ...')
-                    wget.download(url, out = dirname)
+                OCR.download(urls, dirname)
                 return True
             else:
                 print('Response not recognized - please provide correct response')
@@ -470,10 +487,14 @@ def complete_grid_login(grid_data):
     img = transform_image(base64_grid_img)
 
     pytesseract.pytesseract.tesseract_cmd = OCR.PATH
-    raw_text = pytesseract.image_to_string(img, lang='snum', config=OCR.CONFIG)
-    
+    raw_text = pytesseract.image_to_string(
+                    img, 
+                    lang=GridSureExtras.TESSERACT_LANGFILE['name'], 
+                    config=OCR.CONFIG
+    )
+
     print_grid_challenge(raw_text)
-    return pwinput.pwinput(prompt=f"{BColors.WHITE}Enter PIP:{BColors.ENDC} ")
+    return maskpass.askpass(prompt=f"{BColors.WHITE}Enter PIP:{BColors.ENDC} ", mask="*")
 
 
 def complete_push_login(sps_url):
@@ -756,7 +777,7 @@ def main():
                     print('\n')
                 elif "password" in name.lower():
                     # In case Password field also exists in the page, which is for "AD Password + OTP" Keycloak flow
-                    pw = pwinput.pwinput(prompt="Enter Password: ", mask="*")
+                    pw = maskpass.askpass(prompt="Enter Password: ", mask="*")
                     payload[name] = pw
                 elif "sas_response" in name:
                     # In case using STA and page is redirected for anx authentication request page
@@ -778,7 +799,7 @@ def main():
                         password = complete_grid_login(grid_image.get('src'))
 
                     elif authentication_type != 'OTP':
-                        password = pwinput.pwinput(prompt="\nEnter Password: ", mask="*")
+                        password = maskpass.askpass(prompt="\nEnter Password: ", mask="*")
 
                     else:
                         print("\nEnter OTP:", end=' ')
