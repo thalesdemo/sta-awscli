@@ -42,7 +42,7 @@ After successful  authentication, if a user has a single role assigned, an Acces
  $ sta-awscli -h                                   
 sta-awscli (version) MFA for AWS CLI using SafeNet Trusted Access (STA)
 
-usage: sta-awscli [-h] [-v] [-c CLI_CONFIG_PATH] [--update-config] [-u USERNAME] 
+usage: sta-awscli [-h] [-v] [-c CLI_CONFIG_PATH] [--update-config] [-u USERNAME]
                   [-r [REGION] | --region [{eu-north-1,ap-south-1,eu-west-3,eu-west-2,eu-west-1,
                                             eu-central-1,ap-northeast-3,ap-northeast-2,ap-northeast-1,
                                             ap-east-1,ap-southeast-1,ap-southeast-2,sa-east-1,
@@ -59,3 +59,13 @@ options:
   --region [REGION]     Specify AWS region (e.g. us-east-1)
 ```
 
+## Tested OS
+
+The script has been tested on the following OS:
+
+- Windows
+- macOS
+- Linux
+  - Ubuntu
+  - RedHat Enterprise Linux (8.4) - for GriDsure support, requires: Python-devel, GCC, LibGL and Fuse to be installed
+  - Fedora - for GriDsure support, requires: Python-devel, GCC, LibGL and Fuse to be installed
