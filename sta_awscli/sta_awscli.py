@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 __title__ = "MFA for AWS CLI using SafeNet Trusted Access (STA)"
 __homepage__ = 'https://github.com/thalesdemo/sta-awscli'
-__version__ = '2.0.15'
+__version__ = '2.0.16'
 ##########################################################################
 # MFA for AWS CLI using SafeNet Trusted Access (STA)
 ##########################################################################
-# Last updated on: 2022-08-30
+# Last updated on: 2022-08-31
 #
 # NOTE: This script was adapted from a script written by Quint Van Deman
 # published on the AWS Security Blog (https://amzn.to/2gT8IAZ). Notable
@@ -200,7 +200,7 @@ class OCR:
         command = 'ldd --version 2>&1 | head -n 1'
         output = subprocess.getoutput(command)
 
-        glibc_version = ''.join(re.findall('GLIBC ([\d]+\.[\d]+)', output))
+        glibc_version = ''.join(re.findall('([\d]+\.[\d]+)$', output))
 
         if parse_version(glibc_version) < parse_version(fallback_version):
             return True
