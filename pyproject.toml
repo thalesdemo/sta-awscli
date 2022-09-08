@@ -50,7 +50,6 @@ maskpass = "0.3.6"
 scikit-build = "0.15.0"
 testresources = "2.0.1"
 fido2 = "1.0.0"
-cbor = "5.4.3"
 
 [tool.poetry.scripts]
 sta-awscli = "sta_awscli.sta_awscli:main"
