@@ -18,6 +18,10 @@ pyreadline3 = "*"
 wget = "*"
 urllib3 = "*"
 maskpass = "*"
+fido2 = {ref = "b674c2b5ac56fc7eb9e125e71f8a852bafba8574", git = "https://github.com/Yubico/python-fido2.git"}
+testresources = "*"
+scikit-build = "*"
+xmltodict = "*"
 
 [dev-packages]
 

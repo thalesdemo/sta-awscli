@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 __title__ = "MFA for AWS CLI using SafeNet Trusted Access (STA)"
 __homepage__ = 'https://github.com/thalesdemo/sta-awscli'
-__version__ = '2.0.16'
+__version__ = '2.1.0'
 ##########################################################################
 # MFA for AWS CLI using SafeNet Trusted Access (STA)
 ##########################################################################
@@ -48,6 +48,15 @@ from requests.exceptions import ConnectionError
 import colorama
 import wget
 import maskpass
+import json
+from fido2.ctap import CtapError
+from fido2.hid import CtapHidDevice
+from fido2.client import Fido2Client, ClientError, PinRequiredError, UserInteraction, WindowsClient
+from fido2.webauthn import UserVerificationRequirement, PublicKeyCredentialDescriptor, \
+                            PublicKeyCredentialType, PublicKeyCredentialRequestOptions
+import fido2.client
+import xmltodict
+import logging
 
 try:
     import readline
@@ -57,12 +66,28 @@ except ImportError:
 
 ##########################################################################
 # Variables
-
 CONF_SECTION = 'config'
 HOME_DIR = os.path.expanduser('~')
+log = logging.getLogger(__name__) 
+
+class ErrorHandling:
+    FIDO_ERROR_COUNTER = 0
+    FIDO_FALLBACK_THRESHOLD = 2
+
+class LocalStrings:
+    USER_LANG_ISOCODE = None # defaults to 'en' if not specified
+
+    IDP_DEFAULTS = { 
+        "account-not-verified": "We were unable to verify your account. Please check with your local administrator.",
+        "not_authorized_to_access_app": "This application has not been assigned to you. Contact your administrator to be assigned.",
+        "sms-challenge-sent-to-mobile-device": "Enter the passcode that was sent to you by email, text or voice message.",
+        "access-denied": "Your access is denied.",
+    }
+
+    RUNTIME = {}
 
 class BColors:
-    HEADER = '\033[95m'
+    BANNER = '\033[94m'
     OKBLUE = '\033[94m'
     OKCYAN = '\033[96m'
     OKGREEN = '\033[92m'
@@ -110,6 +135,9 @@ aws_region_list = [
         'ap-northeast-3', 'ap-northeast-2', 'ap-northeast-1', 'ap-east-1', 'ap-southeast-1', 'ap-southeast-2',
         'sa-east-1', 'ca-central-1', 'us-east-1', 'us-east-2', 'us-west-1', 'us-west-2',
 ]
+
+# Default spacing for text output
+spacing = 4 * ' '
 
 # OCR dependency for GrIDsure (Tesseract-OCR)
 class OCR:
@@ -340,6 +368,26 @@ class OCR:
 
 
 ##########################################################################
+# Handle FIDO user interaction
+class FidoUserInteraction(UserInteraction):
+    def prompt_up(self):
+        print(f'\n{BColors.WARNING}Touch your FIDO authenticator device now...{BColors.WHITE}\n')
+
+    def request_pin(self, permissions, rd_id):
+        return maskpass.askpass("Enter PIN: ")
+
+    def request_uv(self, permissions, rd_id):
+        print(f"\n{BColors.WARNING}User Verification required.{BColors.WHITE}")
+        return True
+
+# Fix KeyVault or other tokens which do not have options['clientPin'] yet have options['uv'] defined
+def client_pin_is_supported(self, info):
+    return "uv" in info.options or "clientPin" in info.options
+
+# Monkey patching
+fido2.client.ClientPin.is_supported = client_pin_is_supported
+
+##########################################################################
 # Arg parser
 
 def setup_argparser():
@@ -353,6 +401,14 @@ def setup_argparser():
             '-v', '--version',
             action='version',
             version=f'{check_software_version()}'
+
+    )
+
+    parser.add_argument(
+            '-d', '--debug',
+            action='store_true',
+            dest='verbose',
+            help='Enable verbose log to stdout & file (default: .\debug.log)'
 
     )
 
@@ -377,6 +433,14 @@ def setup_argparser():
             dest='username',
             default=None,
             help='Specify your SafeNet Trusted Access Username'
+    )
+
+    parser.add_argument(
+        '-l', '--language',
+        required=False,
+        dest='isocode',
+        default='en',
+        help='Specify the two letter ISO code for the language locale (default: en)'
     )
 
     region_group = parser.add_mutually_exclusive_group(required=False)
@@ -513,6 +577,217 @@ def complete_push_login(sps_url):
         return None
 
 
+def get_fido_client(origin):
+    import ctypes
+    if WindowsClient.is_available() and not ctypes.windll.shell32.IsUserAnAdmin():
+        # Use the Windows WebAuthn API if available, and we're not running as admin
+        client = WindowsClient(origin)
+    else:
+       
+        device_list = []
+
+        try:
+            devices = CtapHidDevice.list_devices()
+            while True:
+                dev = next(devices)
+                device_list.append(dev)
+        except StopIteration:
+            pass
+
+        print("")
+        dev = None
+        number_of_devices = len(device_list)
+        device_list.sort(key=lambda x: x.product_name.lower())
+
+        if number_of_devices > 1:
+            i = 0
+            print(f"{BColors.OKGREEN}Please pick the FIDO token that you would like to use:{BColors.WHITE}\n")
+            for device in device_list:
+                print(spacing + '[', i, ']: ', device.product_name.replace('Fido', 'FIDO')) #, f"(CTAP{device.version})")
+                i += 1
+            try:
+                selectedDevice = int(input(f"\nSelection: {BColors.ENDC}"))
+                if selectedDevice < len(device_list):
+                    dev = device_list[selectedDevice]
+            except ValueError:
+                dev = None
+
+            if not dev:
+                print(f"{BColors.WARNING}Invalid selection - please try again.{BColors.WHITE}")
+
+        elif number_of_devices == 1:
+            dev = device_list[0]
+
+        if dev is not None:
+            print("Use USB HID channel.")
+        else:
+            try:
+                from fido2.pcsc import CtapPcscDevice
+
+                dev = next(CtapPcscDevice.list_devices(), None)
+                print("Use NFC channel.")
+            except Exception as e:
+                print("NFC channel search error:", e)
+
+        if not dev:
+            print(f"{BColors.FAIL}No FIDO device found{BColors.WHITE}")
+            return None
+
+        # Set up a FIDO 2 client using the origin https://example.com
+        client = Fido2Client(dev, origin, user_interaction=FidoUserInteraction())
+
+    return client
+
+
+def complete_fido_login(fido_data, origin_url):
+
+    base64_decode = lambda x : base64.urlsafe_b64decode(x + '=' * ((4 - len(x)) % 4))
+    base64_encode = lambda x : base64.urlsafe_b64encode(x).decode('utf-8').rstrip('=')
+
+    log.debug('Input fido_data (directly from IDP): %s' % fido_data)
+    log.debug('Origin URL: %s' % origin_url)
+
+    fido_data = json.loads(fido_data)
+    challenge = fido_data['challenge']
+    cred_id = fido_data['allowCredentials'][0]['id']
+    timeout = fido_data['timeout']
+    
+    log.debug('Challenge: %s' % challenge)
+    log.debug('Credential ID: %s' % cred_id)
+    log.debug('Timeout value: %s' % fido_data['timeout'])
+
+    challenge = base64_decode(challenge)
+    cred_id = base64_decode(cred_id)
+
+    allowCredentials = [
+        PublicKeyCredentialDescriptor(
+                    PublicKeyCredentialType.PUBLIC_KEY, 
+                    cred_id
+        )
+    ]   
+
+    log.debug('Allow credentials: %s' % allowCredentials)
+
+    fido2_client = get_fido_client(origin_url)
+    if not fido2_client: return None
+
+    print('FIDO2 Client Info:\n%s' % fido2_client.info)
+
+    try:
+        user_verification = UserVerificationRequirement.DISCOURAGED
+        
+        # Check if user verifcation is supported by the authenticator
+        if fido2_client.info.options.get("uv") \
+                        or fido2_client.info.options.get("pinUvAuthToken") \
+                        or fido2_client.info.options.get('clientPin'):
+
+            if ErrorHandling.FIDO_ERROR_COUNTER >= ErrorHandling.FIDO_FALLBACK_THRESHOLD:
+                user_verification = UserVerificationRequirement.DISCOURAGED 
+            else:
+                user_verification = UserVerificationRequirement.PREFERRED 
+                print("Your authenticator supports user verification!")
+        else:
+            print("Your authenticator does not support user verification...")
+
+        options = PublicKeyCredentialRequestOptions(
+                        challenge=challenge,
+                        timeout=timeout,
+                        rp_id=fido_data["rpId"], 
+                        allow_credentials=allowCredentials, 
+                        user_verification=user_verification
+                    )
+        log.debug('FIDO client options: %s' % options)
+
+        assertions = fido2_client.get_assertion(options) 
+        #ErrorHandling.FIDO_ERROR_COUNTER = 0 # assumes no exception, reset counter (optional, script never runs twice without exiting)
+
+    except PinRequiredError:
+        log.warning(f'{BColors.WARNING}AUTH FAIL: A PIN is required and has not been supplied - please try again.{BColors.ENDC}')
+        return None
+
+    except (ClientError, ValueError) as e: 
+
+        if hasattr(e, 'cause') and isinstance(e.cause, CtapError):
+            if e.cause.code == CtapError.ERR.UV_INVALID:
+                print(f'{BColors.FAIL}AUTH FAIL: Wrong biometric PIN. Please try again.{BColors.WHITE}')
+                return None
+            elif e.cause.code == CtapError.ERR.UV_BLOCKED:
+                print(f'{BColors.FAIL}AUTH FAIL: Your authenticator is blocked. You can unlock your token through Chrome (or Windows control panel).{BColors.WHITE}')
+                return None
+            elif e.cause.code in (CtapError.ERR.PIN_INVALID, CtapError.ERR.PIN_BLOCKED, CtapError.ERR.PIN_AUTH_BLOCKED):
+                print(f'{BColors.FAIL}PIN ERROR: %s{BColors.WHITE}' % e.cause.code)
+                return None
+            else:
+                log.warning(f"{BColors.FAIL}%s (%s){BColors.WHITE}" % (str(e.cause).upper(), e.code))
+        else:
+            log.warning(f"{BColors.FAIL}ERROR: %s {BColors.WHITE}" % e)
+
+        # Relaxed PIN enforcement policy
+        ErrorHandling.FIDO_ERROR_COUNTER += 1
+        if ErrorHandling.FIDO_ERROR_COUNTER >= ErrorHandling.FIDO_FALLBACK_THRESHOLD:
+            print(f"{BColors.WARNING}Changing to relaxed enforcement upon next auth attempt...{BColors.WHITE}")
+
+        return None
+      
+    log.debug('FIDO general client info: %s' % str(fido2_client.info))
+
+    assertion = assertions.get_response(0)
+
+    log.debug('ASSERTIONS* (raw): %s' % assertion.extension_results)
+    log.debug('ASSERTIONS* (raw): %s' % assertion.client_data)
+    log.debug('ASSERTION (raw): %s' % assertion)
+    log.debug('ASSERTION client data (raw): %s' % assertion.client_data)
+    log.debug('ASSERTION credential id (base64): %s' % base64_encode(assertion.credential_id))
+    log.debug('ASSERTION signature (raw): %s' % assertion.signature)
+    log.debug('ASSERTION signature (base64): %s' % base64_encode(assertion.signature))
+    log.debug('ASSERTION user handle (string): %s' % assertion.user_handle)
+    log.debug('ASSERTION auth data rp_id_hash (base64): %s' % base64_encode(assertion.authenticator_data.rp_id_hash))
+    log.debug('ASSERTION auth data flags (raw): %s' % assertion.authenticator_data.flags)
+    log.debug('ASSERTION auth data counter (raw): %s' % assertion.authenticator_data.counter)
+    log.debug('ASSERTION auth data extension (raw): %s' % assertion.authenticator_data.extensions)
+
+    authenticator_data = assertion.authenticator_data.rp_id_hash  \
+                        + (assertion.authenticator_data.flags).to_bytes(1, byteorder='big') \
+                        + (assertion.authenticator_data.counter).to_bytes(4, byteorder='big')
+
+    authenticator_data_length = len(authenticator_data)
+    authenticator_data = base64_encode(authenticator_data)
+
+    log.debug('ASSERTION auth data: %s' % authenticator_data)
+    log.debug('ASSERTION auth data length (in bytes): %s' % authenticator_data_length)
+    log.debug('ASSERTION challenge value: %s' % base64_encode(assertion.client_data.challenge))
+    
+    client_data_json = {
+        "type": assertion.client_data.type,
+        "challenge": base64_encode(assertion.client_data.challenge),
+        "origin": assertion.client_data.origin,
+        "crossOrigin": assertion.client_data.cross_origin
+    }
+    client_data_json = json.dumps(client_data_json, separators = (',',':')).encode('utf-8')  
+    client_data_json = base64_encode(client_data_json)
+
+    log.debug('Value of ClientDataJSON (raw): %s' % client_data_json)
+    log.debug('Value of ClientDataJSON (utf-8): %s' % client_data_json)
+    log.debug('Value of ClientDataJSON (base64): %s' % client_data_json)
+
+    response = {
+        "authenticatorData": authenticator_data,
+        "clientDataJSON": client_data_json,
+        "signature": base64_encode(assertion.signature),
+        "userHandle": ('' if not assertion.user_handle else assertion.user_handle)
+    }
+    log.debug('Value of "response" in fidoResult: %s' % response)
+
+    assertion_response = {
+        "id": base64_encode(assertion.credential_id),
+        "rawId":base64_encode(assertion.credential_id),
+        "response": response,
+        "type": "public-key",
+    }
+    assertion_response = json.dumps(assertion_response, separators = (',', ':'))
+    return assertion_response
+
+
 def region_completer(text, state):
     options = [cmd for cmd in aws_region_list if cmd.startswith(text)]
     if state < len(options):
@@ -547,13 +822,13 @@ def show_banner():
     # STA welcome message:
     print(f'''\
 --------------------------------------------------------------------------------
-          Welcome to MFA for AWS CLI using SafeNet Trusted Access!
-{BColors.HEADER}                 _                                        _ _
-             ___| |_ __ _          __ ___      _____  ___| (_)  ({__version__})
-            / __| __/ _` | _____  / _` \ \ /\ / / __|/ __| | |
-            \__ \ || (_| ||_____|| (_| |\ V  V /\__ \ (__| | |
-            |___/\__\__,_|        \__,_| \_/\_/ |___/\___|_|_|
-{BColors.ENDC}
+          Welcome to MFA for AWS CLI using SafeNet Trusted Access!              
+{BColors.BANNER}                 _                                        _ _   
+             ___| |_ __ _          __ ___      _____  ___| (_)  ({__version__}) 
+            / __| __/ _` | _____  / _` \ \ /\ / / __|/ __| | |                  
+            \__ \ || (_| ||_____|| (_| |\ V  V /\__ \ (__| | |                  
+            |___/\__\__,_|        \__,_| \_/\_/ |___/\___|_|_|                  
+{BColors.ENDC}                                                                  
 ================================================================================
     ''')
 
@@ -650,6 +925,75 @@ def load_configuration(args):
     return config
 
 
+def _init_locals_helper(url, etag=False):
+    headers = {'User-Agent': f'STA-AWSCLI Agent {__version__}'}
+
+    url = url.get('value')
+    response = requests.get(url, headers=headers)
+
+    language_url = None
+
+    if etag:
+        response = xmltodict.parse(response.text)['ListBucketResult']['Contents']
+        response = [x for x in response if x['Key'] == (LocalStrings.USER_LANG_ISOCODE + '.json')]
+        response = next(iter(response), None)
+        if not response: return False
+
+        etag_code = response['ETag'].strip('"')
+
+        language_url = url + (LocalStrings.USER_LANG_ISOCODE + '.json') + '?' + etag_code
+
+    else:
+        languages = json.loads(response.text)['languages']
+        #isoCodes = [language['isoCode'] for language in languages]
+        result = [x for x in languages if x['isoCode'] == LocalStrings.USER_LANG_ISOCODE]
+        origin = urllib.parse.urlparse(url)
+        origin = origin.scheme + '://' + origin.netloc
+
+        if not result: return False
+
+        language_url = origin + result[0]['path']
+
+    if language_url:
+        log.debug('Found language ISO code in URL: %s' % language_url)
+        response = requests.get(language_url, headers=headers)
+        response = json.loads(response.text)
+
+        # set runtime local dict 
+        LocalStrings.RUNTIME = response
+        log.debug('Loaded language pack.')
+        return True
+
+    return False
+
+
+def init_runtime_locals(soup):
+    """Set localization texts in LocalStrings.RUNTIME
+    :param soup: bs4 of idp html page
+    """
+    if not LocalStrings.RUNTIME:
+        idp_locals_custom_url =  soup.find(id="customLanguageListUrl")
+
+        if(idp_locals_custom_url):
+            if _init_locals_helper(idp_locals_custom_url):
+                return True
+            else:
+                log.debug('Not found lang requested (%s) in custom URL pack.' % LocalStrings.USER_LANG_ISOCODE)
+
+        idp_locals_default_url = soup.find(id="localizationStoreUrl")
+
+        if(idp_locals_default_url):
+            if _init_locals_helper(idp_locals_default_url, etag=True):
+                return True
+            else:
+                log.debug('Not found lang requested (%s) in default URL pack. ' % LocalStrings.USER_LANG_ISOCODE)
+
+        # Apply default localization if above method (URL-requests) fail
+        LocalStrings.RUNTIME = LocalStrings.IDP_DEFAULTS
+
+    return True
+
+
 def init():
     # If using Windows, coloroma.init() will cause anything sent to stdout
     # or stderr to have ANSI color codes converted to the Windows versions.
@@ -657,8 +1001,20 @@ def init():
     colorama.init()
     #print(colorama.ansi.clear_screen())
     args = setup_argparser()
+    if args.verbose:
+        logging.basicConfig(
+                    level=logging.DEBUG,
+                    format=f'%(asctime)s %(name)s.%(funcName)s:%(lineno)d [%(levelname)s] - %(message)s',
+                    handlers=[
+                        logging.FileHandler("debug.log", mode='a', encoding='utf-8'),
+                        logging.StreamHandler()
+                    ]
+        )
+        log.info('[INIT] Logging enabled to: debug.log')
     show_banner()
     config = load_configuration(args)
+    LocalStrings.USER_LANG_ISOCODE = args.isocode # init isocode for locales
+
     return args, config
 
 
@@ -717,10 +1073,12 @@ def main():
     print(f"{BColors.ENDC}{BColors.OKGREEN}\nKeycloak AWS app: {BColors.WHITE}{BColors.BOLD}{idpentryurl}{BColors.ENDC}")
 
     # sas_user: The name you have given to the AWS app in the Identity Provider
-    if not config.has_option(CONF_SECTION, ConfigFile.STA_USERNAME):
-        sas_user = None
-    else:
+    if args.username:
+        sas_user = args.username
+    elif config.has_option(CONF_SECTION, ConfigFile.STA_USERNAME):
         sas_user = config.get(CONF_SECTION, ConfigFile.STA_USERNAME)
+    else:
+        sas_user = None
 
     ##########################################################################
     # Debugging if you are having any major issues:
@@ -737,9 +1095,7 @@ def main():
     idpauthformsubmiturl = response.url
     assertion = ''
 
-
     while True:
-        # print(response.text)
         soup = BeautifulSoup(response.text, "html.parser")
         payload = {}
 
@@ -747,6 +1103,27 @@ def main():
 
         # There is a login form, need to fill it and post it
         if login_form:
+
+            # initialize localization strings, if not already the case
+            init_runtime_locals(soup)
+
+            # display any error message
+            error_message = soup.find(id="errorMsgLblContent")
+            if error_message:
+                error_message = error_message.get('data-i18n')
+                if error_message in LocalStrings.RUNTIME:
+                    print('\n' + BColors.FAIL + LocalStrings.RUNTIME[error_message] + BColors.WHITE + '\n')
+                    sas_user = None
+
+            # display any info label
+            challenge_message = soup.find(id="challenge-data")
+            #if info_message: info_message = info_message.get('challenge-data', None)
+            if challenge_message: 
+                challenge_message = challenge_message.get('data-i18n')
+                if challenge_message in LocalStrings.RUNTIME:
+                    print(BColors.OKGREEN + LocalStrings.RUNTIME[challenge_message] + BColors.WHITE)
+
+    
             # Parse the response and extract all the necessary values
             for inputtag in login_form.find_all(re.compile('(INPUT|input)')):
                 name = inputtag.get('name', '')
@@ -754,8 +1131,6 @@ def main():
 
                 if "sas_user" in name.lower() and value == '':
                     # In STA the username field is called "sas_user"
-                    if args.username:
-                        sas_user = args.username
                     if not sas_user:
                         sas_user = input("Enter Username: ")
                     else:
@@ -767,14 +1142,26 @@ def main():
                         payload['authenticationId'] = sps_response
                         payload['pushOtpSpsStatus'] = "RESPONSE_AVAILABLE"
                         break
-
                     else:
                         payload.pop('authenticationId', None)
                         payload['pushtype'] = ''
                         payload.pop('pushOtpSpsStatus', None)
                         payload.pop('pushPage', None)
-
                     print('\n')
+                elif "fidopage" in name.lower():
+                    origin = urllib.parse.urlparse(idpauthformsubmiturl)
+                    origin = origin.scheme + '://' + origin.netloc
+                    fido_data = soup.find(id="fido_data")["value"]
+                    fido_response = complete_fido_login(fido_data, origin)
+                    if not fido_response:
+                        input("\nPress <ENTER> to continue.\n")
+                    else:
+                        payload['fidoStatus'] = 'SUCCESS'
+                        payload['fidoResult'] = fido_response
+                        payload['fidoPage'] = True
+                        log.info('Ready to POST fido_response (fidoResult) to IDP: %s' % fido_response)
+                        break
+
                 elif "password" in name.lower():
                     # In case Password field also exists in the page, which is for "AD Password + OTP" Keycloak flow
                     pw = maskpass.askpass(prompt="Enter Password: ", mask="*")
@@ -815,7 +1202,7 @@ def main():
             # note: wasn't required but strange to have kvp '':''
             if '' in payload:
                 payload.pop('')
-            #print(payload)
+            log.info('Payload: %s' % payload)
 
             idpauthformsubmiturl = login_form.get('action')
 
@@ -847,7 +1234,7 @@ def main():
 
 
     # Better error handling is required for production use.
-    if (assertion == ''):
+    if not assertion:
         # TODO: Insert valid error checking/handling
         sys.exit('Ooops! Wrong username/password or the response did not contain a valid SAML assertion')
 
@@ -875,23 +1262,27 @@ def main():
 
     # If I have more than one role, ask the user which one they want,
     # otherwise just proceed
-    print("")
     if len(awsroles) > 1:
-        #print(awsroles) For debug purposes
-        i = 0
-        print(f"{BColors.OKGREEN}Please choose the role you would like to assume:{BColors.WHITE}\n")
-        for awsrole in awsroles:
-            print('[', i, ']: ', awsrole.split(',')[0])
-            i += 1
-        print(f"\nSelection: {BColors.ENDC}", end=' ')
-        selectedroleindex = input()
+        while True:
+            i = 0
+            print(f"{BColors.OKGREEN}Please choose the role you would like to assume:{BColors.WHITE}\n")
+            for awsrole in awsroles:
+                print(spacing + '[', i, ']: ', awsrole.split(',')[0])
+                i += 1
+            selectedroleindex = input(f"\nSelection: {BColors.ENDC}")
 
-        # Basic sanity check of input
-        if int(selectedroleindex) > (len(awsroles) - 1):
-            sys.exit('You selected an invalid role index, please try again')
+            try:
+                selection = int(selectedroleindex)
+            except ValueError:
+                selection = -1
 
-        role_arn = awsroles[int(selectedroleindex)].split(',')[0]
-        principal_arn = awsroles[int(selectedroleindex)].split(',')[1]
+            if selection > (len(awsroles) - 1) or selection < 0:
+                print('You selected an invalid role index, please try again')
+            else:
+                role_arn = awsroles[selection].split(',')[0]
+                principal_arn = awsroles[selection].split(',')[1]
+                break
+
     elif len(awsroles) > 0:
         role_arn = awsroles[0].split(',')[0]
         principal_arn = awsroles[0].split(',')[1]
