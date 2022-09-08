@@ -49,7 +49,7 @@ wget = "3.2"
 maskpass = "0.3.6"
 scikit-build = "0.15.0"
 testresources = "2.0.1"
-fido2-dev = "1.0.1.dev0"
+fido2 = "1.0.0"
 xmltodict = "0.13.0"
 
 [tool.poetry.scripts]
