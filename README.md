@@ -36,6 +36,15 @@ If the user has multiple tokens assigned, the user is aksed to provide an OTP, b
 
 After successful  authentication, if a user has a single role assigned, an Access Token is generated and stored in .aws\credentials file. If the user has multiple roles assigned, the user is presented with the list of available roles to select the desired role and an Access Token is generated and stored.
 
+## FIDO Support
+
+sta-awscli supports FIDO2 (WebAuthn) authentication. To be able to use your FIDO authenticator, it first has to be enrolled in STA (https://thalesdocs.com/sta/operator/authentication/fido/index.html). To use the FIDO authenticator, STA policy for Keycloak has to be adjust to require FIDO authentication. The following authenticators have been tested:
+
+- SafeNet eToken FIDO
+- SafeNet IDPrime FIDO
+- Yubico Yubikey
+- Crayonic KeyVault
+
 ## Switches
 
 ```
@@ -50,13 +59,17 @@ usage: sta-awscli [-h] [-v] [-c CLI_CONFIG_PATH] [--update-config] [-u USERNAME]
 options:
   -h, --help            show this help message and exit
   -v, --version         show program's version number and exit
+  -d, --debug           Enable verbose log to stdout & file (default: .\debug.log)
   -c CLI_CONFIG_PATH, --config CLI_CONFIG_PATH
                         Specify script configuration file path
   --update-config       Force update sta-awscli configuration file
-  -u USERNAME, --username USERNAME
+  -u USERNAME, --username USERNAME      
                         Specify your SafeNet Trusted Access Username
+  -l ISOCODE, --language ISOCODE
+                        Specify the two letter ISO code for the language locale (default: en)
   -r [REGION]           Specify any AWS region (without input checking)
   --region [REGION]     Specify AWS region (e.g. us-east-1)
+
 ```
 
 ## Tested OS
