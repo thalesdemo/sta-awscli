@@ -380,12 +380,44 @@ class FidoUserInteraction(UserInteraction):
         print(f"\n{BColors.WARNING}User Verification required.{BColors.WHITE}")
         return True
 
-# Fix KeyVault or other tokens which do not have options['clientPin'] yet have options['uv'] defined
-def client_pin_is_supported(self, info):
+# # Monkey patching: Fix KeyVault or other tokens which do not have options['clientPin'] yet have options['uv'] defined
+def monkey_patch_client_pin_is_supported(self, info):
     return "uv" in info.options or "clientPin" in info.options
 
-# Monkey patching
-fido2.client.ClientPin.is_supported = client_pin_is_supported
+fido2.client.ClientPin.is_supported = monkey_patch_client_pin_is_supported
+
+# Monkey patching: Temporary until fido2 library incorporates their latest fix
+from typing import Union
+from fido2.utils import websafe_encode
+import fido2.webauthn
+
+@classmethod
+def monkey_patch_create_clientcredential(
+    cls,
+    type: str,
+    challenge: Union[bytes, str],
+    origin: str,
+    cross_origin: bool = False,
+    **kwargs,
+) -> fido2.webauthn.CollectedClientData:
+    if isinstance(challenge, bytes):
+        encoded_challenge = websafe_encode(challenge)
+    else:
+        encoded_challenge = challenge
+    return cls(
+        json.dumps(
+            {
+                "type": type,
+                "challenge": encoded_challenge,
+                "origin": origin,
+                "crossOrigin": cross_origin,
+                **kwargs,
+            },
+            separators=(",", ":"),
+        ).encode()
+    )
+
+fido2.webauthn.CollectedClientData.create = monkey_patch_create_clientcredential
 
 ##########################################################################
 # Arg parser
