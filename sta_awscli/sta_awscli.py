@@ -440,7 +440,7 @@ def setup_argparser():
         required=False,
         dest='isocode',
         default='en',
-        help='Specify the two letter ISO code for the language locale (default: en)'
+        help='Specify the short ISO code for the language locale, default: en'
     )
 
     region_group = parser.add_mutually_exclusive_group(required=False)
