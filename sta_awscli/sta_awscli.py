@@ -671,7 +671,7 @@ def complete_fido_login(fido_data, origin_url):
     fido2_client = get_fido_client(origin_url)
     if not fido2_client: return None
 
-    print('FIDO2 Client Info:\n%s' % fido2_client.info)
+    log.info('FIDO2 Client Info:\n%s' % fido2_client.info)
 
     try:
         user_verification = UserVerificationRequirement.DISCOURAGED
@@ -729,12 +729,8 @@ def complete_fido_login(fido_data, origin_url):
 
         return None
       
-    log.debug('FIDO general client info: %s' % str(fido2_client.info))
-
     assertion = assertions.get_response(0)
 
-    log.debug('ASSERTIONS* (raw): %s' % assertion.extension_results)
-    log.debug('ASSERTIONS* (raw): %s' % assertion.client_data)
     log.debug('ASSERTION (raw): %s' % assertion)
     log.debug('ASSERTION client data (raw): %s' % assertion.client_data)
     log.debug('ASSERTION credential id (base64): %s' % base64_encode(assertion.credential_id))
@@ -745,6 +741,7 @@ def complete_fido_login(fido_data, origin_url):
     log.debug('ASSERTION auth data flags (raw): %s' % assertion.authenticator_data.flags)
     log.debug('ASSERTION auth data counter (raw): %s' % assertion.authenticator_data.counter)
     log.debug('ASSERTION auth data extension (raw): %s' % assertion.authenticator_data.extensions)
+    log.debug('ASSERTION extension results (raw): %s' % assertion.extension_results)
 
     authenticator_data = assertion.authenticator_data.rp_id_hash  \
                         + (assertion.authenticator_data.flags).to_bytes(1, byteorder='big') \
