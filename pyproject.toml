@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "sta-awscli"
-version = "2.1.0"
+version = "2.1.1"
 authors = ["Gur Talmor, Cina Shaykhian and Alex Basin"]
 description = "MFA for AWS CLI using SafeNet Trusted Access (STA)"
 readme = "README.md"
@@ -49,7 +49,7 @@ wget = "3.2"
 maskpass = "0.3.6"
 scikit-build = "0.15.0"
 testresources = "2.0.1"
-fido2 = "1.0.0"
+fido2 = {ref = "b674c2b5ac56fc7eb9e125e71f8a852bafba8574", git = "https://github.com/Yubico/python-fido2.git#egg=fido"}
 
 [tool.poetry.scripts]
 sta-awscli = "sta_awscli.sta_awscli:main"
