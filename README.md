@@ -19,6 +19,7 @@ The configuration file includes:
 - Keycloak version
 - Keycloak Realm Name
 - AWS application name in Keycloak
+- STA Username (optional)
 
 For example:
 ```
@@ -28,6 +29,7 @@ cloud_idp =
 is_new_kc =  
 tenant_reference_id =  
 aws_app_name =  
+sta_username =
 ```
 ## Usage
 
@@ -66,7 +68,7 @@ options:
   -u USERNAME, --username USERNAME      
                         Specify your SafeNet Trusted Access Username
   -l ISOCODE, --language ISOCODE
-                        Specify the two letter ISO code for the language locale (default: en)
+                        Specify the short ISO code for the language locale, default: en
   -r [REGION]           Specify any AWS region (without input checking)
   --region [REGION]     Specify AWS region (e.g. us-east-1)
 

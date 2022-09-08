@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 __title__ = "MFA for AWS CLI using SafeNet Trusted Access (STA)"
 __homepage__ = 'https://github.com/thalesdemo/sta-awscli'
-__version__ = '2.1.1'
+__version__ = '2.1.2'
 ##########################################################################
 # MFA for AWS CLI using SafeNet Trusted Access (STA)
 ##########################################################################
@@ -68,7 +68,7 @@ except ImportError:
 # Variables
 CONF_SECTION = 'config'
 HOME_DIR = os.path.expanduser('~')
-log = logging.getLogger(__name__) 
+log = logging.getLogger(__name__)
 
 class ErrorHandling:
     FIDO_ERROR_COUNTER = 0
@@ -77,7 +77,7 @@ class ErrorHandling:
 class LocalStrings:
     USER_LANG_ISOCODE = None # defaults to 'en' if not specified
 
-    IDP_DEFAULTS = { 
+    IDP_DEFAULTS = {
         "account-not-verified": "We were unable to verify your account. Please check with your local administrator.",
         "not_authorized_to_access_app": "This application has not been assigned to you. Contact your administrator to be assigned.",
         "sms-challenge-sent-to-mobile-device": "Enter the passcode that was sent to you by email, text or voice message.",
@@ -583,7 +583,7 @@ def get_fido_client(origin):
         # Use the Windows WebAuthn API if available, and we're not running as admin
         client = WindowsClient(origin)
     else:
-       
+
         device_list = []
 
         try:
@@ -651,7 +651,7 @@ def complete_fido_login(fido_data, origin_url):
     challenge = fido_data['challenge']
     cred_id = fido_data['allowCredentials'][0]['id']
     timeout = fido_data['timeout']
-    
+
     log.debug('Challenge: %s' % challenge)
     log.debug('Credential ID: %s' % cred_id)
     log.debug('Timeout value: %s' % fido_data['timeout'])
@@ -661,10 +661,10 @@ def complete_fido_login(fido_data, origin_url):
 
     allowCredentials = [
         PublicKeyCredentialDescriptor(
-                    PublicKeyCredentialType.PUBLIC_KEY, 
+                    PublicKeyCredentialType.PUBLIC_KEY,
                     cred_id
         )
-    ]   
+    ]
 
     log.debug('Allow credentials: %s' % allowCredentials)
 
@@ -675,16 +675,16 @@ def complete_fido_login(fido_data, origin_url):
 
     try:
         user_verification = UserVerificationRequirement.DISCOURAGED
-        
+
         # Check if user verifcation is supported by the authenticator
         if fido2_client.info.options.get("uv") \
                         or fido2_client.info.options.get("pinUvAuthToken") \
                         or fido2_client.info.options.get('clientPin'):
 
             if ErrorHandling.FIDO_ERROR_COUNTER >= ErrorHandling.FIDO_FALLBACK_THRESHOLD:
-                user_verification = UserVerificationRequirement.DISCOURAGED 
+                user_verification = UserVerificationRequirement.DISCOURAGED
             else:
-                user_verification = UserVerificationRequirement.PREFERRED 
+                user_verification = UserVerificationRequirement.PREFERRED
                 print("Your authenticator supports user verification!")
         else:
             print("Your authenticator does not support user verification...")
@@ -692,20 +692,20 @@ def complete_fido_login(fido_data, origin_url):
         options = PublicKeyCredentialRequestOptions(
                         challenge=challenge,
                         timeout=timeout,
-                        rp_id=fido_data["rpId"], 
-                        allow_credentials=allowCredentials, 
+                        rp_id=fido_data["rpId"],
+                        allow_credentials=allowCredentials,
                         user_verification=user_verification
                     )
         log.debug('FIDO client options: %s' % options)
 
-        assertions = fido2_client.get_assertion(options) 
+        assertions = fido2_client.get_assertion(options)
         #ErrorHandling.FIDO_ERROR_COUNTER = 0 # assumes no exception, reset counter (optional, script never runs twice without exiting)
 
     except PinRequiredError:
         log.warning(f'{BColors.WARNING}AUTH FAIL: A PIN is required and has not been supplied - please try again.{BColors.ENDC}')
         return None
 
-    except (ClientError, ValueError) as e: 
+    except (ClientError, ValueError) as e:
 
         if hasattr(e, 'cause') and isinstance(e.cause, CtapError):
             if e.cause.code == CtapError.ERR.UV_INVALID:
@@ -728,7 +728,7 @@ def complete_fido_login(fido_data, origin_url):
             print(f"{BColors.WARNING}Changing to relaxed enforcement upon next auth attempt...{BColors.WHITE}")
 
         return None
-      
+
     assertion = assertions.get_response(0)
 
     log.debug('ASSERTION (raw): %s' % assertion)
@@ -753,14 +753,14 @@ def complete_fido_login(fido_data, origin_url):
     log.debug('ASSERTION auth data: %s' % authenticator_data)
     log.debug('ASSERTION auth data length (in bytes): %s' % authenticator_data_length)
     log.debug('ASSERTION challenge value: %s' % base64_encode(assertion.client_data.challenge))
-    
+
     client_data_json = {
         "type": assertion.client_data.type,
         "challenge": base64_encode(assertion.client_data.challenge),
         "origin": assertion.client_data.origin,
         "crossOrigin": assertion.client_data.cross_origin
     }
-    client_data_json = json.dumps(client_data_json, separators = (',',':')).encode('utf-8')  
+    client_data_json = json.dumps(client_data_json, separators = (',',':')).encode('utf-8')
     client_data_json = base64_encode(client_data_json)
 
     log.debug('Value of ClientDataJSON (raw): %s' % client_data_json)
@@ -819,13 +819,13 @@ def show_banner():
     # STA welcome message:
     print(f'''\
 --------------------------------------------------------------------------------
-          Welcome to MFA for AWS CLI using SafeNet Trusted Access!              
-{BColors.BANNER}                 _                                        _ _   
-             ___| |_ __ _          __ ___      _____  ___| (_)  ({__version__}) 
-            / __| __/ _` | _____  / _` \ \ /\ / / __|/ __| | |                  
-            \__ \ || (_| ||_____|| (_| |\ V  V /\__ \ (__| | |                  
-            |___/\__\__,_|        \__,_| \_/\_/ |___/\___|_|_|                  
-{BColors.ENDC}                                                                  
+          Welcome to MFA for AWS CLI using SafeNet Trusted Access!
+{BColors.BANNER}                 _                                        _ _
+             ___| |_ __ _          __ ___      _____  ___| (_)  ({__version__})
+            / __| __/ _` | _____  / _` \ \ /\ / / __|/ __| | |
+            \__ \ || (_| ||_____|| (_| |\ V  V /\__ \ (__| | |
+            |___/\__\__,_|        \__,_| \_/\_/ |___/\___|_|_|
+{BColors.ENDC}
 ================================================================================
     ''')
 
@@ -956,7 +956,7 @@ def _init_locals_helper(url, etag=False):
         response = requests.get(language_url, headers=headers)
         response = json.loads(response.text)
 
-        # set runtime local dict 
+        # set runtime local dict
         LocalStrings.RUNTIME = response
         log.debug('Loaded language pack.')
         return True
@@ -1115,12 +1115,12 @@ def main():
             # display any info label
             challenge_message = soup.find(id="challenge-data")
             #if info_message: info_message = info_message.get('challenge-data', None)
-            if challenge_message: 
+            if challenge_message:
                 challenge_message = challenge_message.get('data-i18n')
                 if challenge_message in LocalStrings.RUNTIME:
                     print(BColors.OKGREEN + LocalStrings.RUNTIME[challenge_message] + BColors.WHITE)
 
-    
+
             # Parse the response and extract all the necessary values
             for inputtag in login_form.find_all(re.compile('(INPUT|input)')):
                 name = inputtag.get('name', '')
