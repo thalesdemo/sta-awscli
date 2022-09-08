@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 __title__ = "MFA for AWS CLI using SafeNet Trusted Access (STA)"
 __homepage__ = 'https://github.com/thalesdemo/sta-awscli'
-__version__ = '2.1.1'
+__version__ = '2.1.2'
 ##########################################################################
 # MFA for AWS CLI using SafeNet Trusted Access (STA)
 ##########################################################################
@@ -440,7 +440,7 @@ def setup_argparser():
         required=False,
         dest='isocode',
         default='en',
-        help='Specify the two letter ISO code for the language locale (default: en)'
+        help='Specify the short ISO code for the language locale, default: en'
     )
 
     region_group = parser.add_mutually_exclusive_group(required=False)
