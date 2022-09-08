@@ -49,7 +49,7 @@ wget = "3.2"
 maskpass = "0.3.6"
 scikit-build = "0.15.0"
 testresources = "2.0.1"
-fido2 = { git = "https://github.com/Yubico/python-fido2.git@b674c2b5ac56fc7eb9e125e71f8a852bafba8574#egg=fido2", branch = "main" }
+fido2 = { git = "https://github.com/Yubico/python-fido2.git", branch = "main", rev="b674c2b"}
 
 [tool.poetry.scripts]
 sta-awscli = "sta_awscli.sta_awscli:main"
