@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 __title__ = "MFA for AWS CLI using SafeNet Trusted Access (STA)"
 __homepage__ = 'https://github.com/thalesdemo/sta-awscli'
-__version__ = '2.1.3'
+__version__ = '2.1.4'
 ##########################################################################
 # MFA for AWS CLI using SafeNet Trusted Access (STA)
 ##########################################################################
@@ -82,6 +82,10 @@ class LocalStrings:
         "not_authorized_to_access_app": "This application has not been assigned to you. Contact your administrator to be assigned.",
         "sms-challenge-sent-to-mobile-device": "Enter the passcode that was sent to you by email, text or voice message.",
         "access-denied": "Your access is denied.",
+        "username": "Username",
+        "passcode": "Passcode",
+        "ad-password-challenge": "Enter your Domain Password",
+        "error-heading": "An error occurred",
     }
 
     RUNTIME = {}
@@ -590,7 +594,7 @@ def complete_grid_login(grid_data):
     )
 
     print_grid_challenge(raw_text)
-    return maskpass.askpass(prompt=f"{BColors.WHITE}Enter PIP:{BColors.ENDC} ", mask="*")
+    return maskpass.askpass(prompt=f"{BColors.WHITE}" + get_i18n_text('passcode') + f":{BColors.ENDC} ")
 
 
 def complete_push_login(sps_url):
@@ -632,15 +636,15 @@ def get_fido_client(origin):
         device_list.sort(key=lambda x: x.product_name.lower())
 
         if number_of_devices > 1:
-            i = 0
+            i = 1
             print(f"{BColors.OKGREEN}Please pick the FIDO token that you would like to use:{BColors.WHITE}\n")
             for device in device_list:
                 print(spacing + '[', i, ']: ', device.product_name.replace('Fido', 'FIDO')) #, f"(CTAP{device.version})")
                 i += 1
             try:
                 selectedDevice = int(input(f"\nSelection: {BColors.ENDC}"))
-                if selectedDevice < len(device_list):
-                    dev = device_list[selectedDevice]
+                if selectedDevice > 0 and selectedDevice <= len(device_list):
+                    dev = device_list[selectedDevice - 1]
             except ValueError:
                 dev = None
 
@@ -954,7 +958,14 @@ def load_configuration(args):
     return config
 
 
-def _init_locals_helper(url, etag=False):
+def get_i18n_text(keyname):
+    if keyname in LocalStrings.RUNTIME.keys():
+        return LocalStrings.RUNTIME[keyname]
+    else:
+        return keyname
+
+
+def _init_locals_helper(url, isocode, etag=False):
     headers = {'User-Agent': f'STA-AWSCLI Agent {__version__}'}
 
     url = url.get('value')
@@ -964,18 +975,22 @@ def _init_locals_helper(url, etag=False):
 
     if etag:
         response = xmltodict.parse(response.text)['ListBucketResult']['Contents']
-        response = [x for x in response if x['Key'] == (LocalStrings.USER_LANG_ISOCODE + '.json')]
+        response = [x for x in response if x['Key'] == (isocode + '.json')]
         response = next(iter(response), None)
         if not response: return False
 
         etag_code = response['ETag'].strip('"')
 
-        language_url = url + (LocalStrings.USER_LANG_ISOCODE + '.json') + '?' + etag_code
+        language_url = url + (isocode + '.json') + '?' + etag_code
 
     else:
-        languages = json.loads(response.text)['languages']
+        response = json.loads(response.text)
+        languages = response['languages']
+
+        if not response['enabled']: return False
+
         #isoCodes = [language['isoCode'] for language in languages]
-        result = [x for x in languages if x['isoCode'] == LocalStrings.USER_LANG_ISOCODE]
+        result = [x for x in languages if x['isoCode'] == isocode]
         origin = urllib.parse.urlparse(url)
         origin = origin.scheme + '://' + origin.netloc
 
@@ -988,9 +1003,9 @@ def _init_locals_helper(url, etag=False):
         response = requests.get(language_url, headers=headers)
         response = json.loads(response.text)
 
-        # set runtime local dict
-        LocalStrings.RUNTIME = response
-        log.debug('Loaded language pack.')
+        # update runtime local dict
+        LocalStrings.RUNTIME.update(response)
+        log.debug('Updated language pack.')
         return True
 
     return False
@@ -1001,26 +1016,55 @@ def init_runtime_locals(soup):
     :param soup: bs4 of idp html page
     """
     if not LocalStrings.RUNTIME:
-        idp_locals_custom_url =  soup.find(id="customLanguageListUrl")
+        # Store user selected isocode
+        isocode = LocalStrings.USER_LANG_ISOCODE
 
-        if(idp_locals_custom_url):
-            if _init_locals_helper(idp_locals_custom_url):
-                return True
-            else:
-                log.debug('Not found lang requested (%s) in custom URL pack.' % LocalStrings.USER_LANG_ISOCODE)
+        # First, set hardcoded texts should below method (URL-requests) fail
+        LocalStrings.RUNTIME = LocalStrings.IDP_DEFAULTS
 
+        # Second, apply over default ENGLISH language text, then same with LOCALE language
         idp_locals_default_url = soup.find(id="localizationStoreUrl")
 
         if(idp_locals_default_url):
-            if _init_locals_helper(idp_locals_default_url, etag=True):
-                return True
-            else:
-                log.debug('Not found lang requested (%s) in default URL pack. ' % LocalStrings.USER_LANG_ISOCODE)
+            if not _init_locals_helper(idp_locals_default_url, isocode='en', etag=True):
+                log.debug('Not found lang requested (en) in default URL pack. ')
 
-        # Apply default localization if above method (URL-requests) fail
-        LocalStrings.RUNTIME = LocalStrings.IDP_DEFAULTS
+            if not _init_locals_helper(idp_locals_default_url, isocode=isocode, etag=True):
+                log.debug('Not found lang requested (%s) in default URL pack. ' % isocode)
+
+        # Third, apply over custom tenant localization
+        idp_locals_custom_url =  soup.find(id="customLanguageListUrl")
+
+        if(idp_locals_custom_url):
+            if not _init_locals_helper(idp_locals_custom_url, isocode=isocode):
+                log.debug('Not found lang requested (%s) in custom URL pack.' % isocode)
 
     return True
+
+
+def make_token_selection(html):
+    i = 1
+    print('')
+    for element in html:
+        keyname = element.find('span')
+        if not keyname:
+            print('ERROR: Invalid HTML format. Token options may be missing from this selection.',
+                '\nPlease try again or report this incident.\n')
+            continue
+        keyname =  keyname['data-i18n']
+
+        print(spacing + '[', i, ']: ', get_i18n_text(keyname)) 
+        i += 1
+                
+    try:
+        selected_token = int(input(f"\nSelection: {BColors.ENDC}"))
+        if selected_token > 0 and selected_token <= len(html):
+            return html[selected_token - 1]['value']   
+    except ValueError:
+        pass
+
+    print(f'{BColors.WARNING}Invalid selection - please try again.{BColors.WHITE}')
+    return None
 
 
 def init():
@@ -1045,7 +1089,6 @@ def init():
     LocalStrings.USER_LANG_ISOCODE = args.isocode # init isocode for locales
 
     return args, config
-
 
 ##########################################################################
 # Main function
@@ -1153,79 +1196,85 @@ def main():
                     print(BColors.OKGREEN + LocalStrings.RUNTIME[challenge_message] + BColors.WHITE)
 
 
-            # Parse the response and extract all the necessary values
-            for inputtag in login_form.find_all(re.compile('(INPUT|input)')):
-                name = inputtag.get('name', '')
-                value = inputtag.get('value', '')
+            token_selection = soup.find_all('div', attrs={'id':'sas-otp-token', 'class':'sas-otp-option' })
+    
+            if token_selection:
+                payload['submitted'] = 'submitted'
+                payload['sas_response'] = make_token_selection(token_selection)
 
-                if "sas_user" in name.lower() and value == '':
-                    # In STA the username field is called "sas_user"
-                    if not sas_user:
-                        sas_user = input("Enter Username: ")
-                    else:
-                        print(f'Username {BColors.OKGREEN}(auto-submit): {BColors.WHITE}{sas_user}')
-                    payload[name] = sas_user
-                elif "sas_push" in name.lower():
-                    sps_response = complete_push_login(value)
-                    if sps_response:
-                        payload['authenticationId'] = sps_response
-                        payload['pushOtpSpsStatus'] = "RESPONSE_AVAILABLE"
-                        break
-                    else:
-                        payload.pop('authenticationId', None)
-                        payload['pushtype'] = ''
-                        payload.pop('pushOtpSpsStatus', None)
-                        payload.pop('pushPage', None)
-                    print('\n')
-                elif "fidopage" in name.lower():
-                    origin = urllib.parse.urlparse(idpauthformsubmiturl)
-                    origin = origin.scheme + '://' + origin.netloc
-                    fido_data = soup.find(id="fido_data")["value"]
-                    fido_response = complete_fido_login(fido_data, origin)
-                    if not fido_response:
-                        input("\nPress <ENTER> to continue.\n")
-                    else:
-                        payload['fidoStatus'] = 'SUCCESS'
-                        payload['fidoResult'] = fido_response
-                        payload['fidoPage'] = True
-                        log.info('Ready to POST fido_response (fidoResult) to IDP: %s' % fido_response)
-                        break
+            else:
+                # Parse the response and extract all the necessary values
+                for inputtag in login_form.find_all(re.compile('(INPUT|input)')):
+                    name = inputtag.get('name', '')
+                    value = inputtag.get('value', '')
 
-                elif "password" in name.lower():
-                    # In case Password field also exists in the page, which is for "AD Password + OTP" Keycloak flow
-                    pw = maskpass.askpass(prompt="Enter Password: ", mask="*")
-                    payload[name] = pw
-                elif "sas_response" in name:
-                    # In case using STA and page is redirected for anx authentication request page
-                    authentication_type = 'OTP'
-
-                    grid_image = soup.find(id='GRIDSUREImage')
-                    if grid_image:
-                        if OCR.init():
-                            authentication_type = 'GRID'
+                    if "sas_user" in name.lower() and value == '':
+                        # In STA the username field is called "sas_user"
+                        if not sas_user:
+                            sas_user = input(get_i18n_text('username') + ": ")
                         else:
-                            print(f'\n{BColors.FAIL}A grid image was detected on the page but could not be rendered due to missing dependencies.{BColors.ENDC}')
+                            print(f'Username {BColors.OKGREEN}(auto-submit): {BColors.WHITE}{sas_user}')
+                        payload[name] = sas_user
+                    elif "sas_push" in name.lower():
+                        sps_response = complete_push_login(value)
+                        if sps_response:
+                            payload['authenticationId'] = sps_response
+                            payload['pushOtpSpsStatus'] = "RESPONSE_AVAILABLE"
+                            break
+                        else:
+                            payload.pop('authenticationId', None)
+                            payload['pushtype'] = ''
+                            payload.pop('pushOtpSpsStatus', None)
+                            payload.pop('pushPage', None)
+                        print('\n')
+                    elif "fidopage" in name.lower():
+                        origin = urllib.parse.urlparse(idpauthformsubmiturl)
+                        origin = origin.scheme + '://' + origin.netloc
+                        fido_data = soup.find(id="fido_data")["value"]
+                        fido_response = complete_fido_login(fido_data, origin)
+                        if not fido_response:
+                            input("\nPress <ENTER> to continue.\n")
+                        else:
+                            payload['fidoStatus'] = 'SUCCESS'
+                            payload['fidoResult'] = fido_response
+                            payload['fidoPage'] = True
+                            log.info('Ready to POST fido_response (fidoResult) to IDP: %s' % fido_response)
+                            break
 
-                    for inputtag in login_form.find_all(re.compile('(label)')):
-                        # Solving for Policy in STA with "AD Password + OTP"
-                        if 'data-i18n' in inputtag.attrs and inputtag.attrs['data-i18n'] == 'ad-password-challenge':
-                            authentication_type = 'AD Password'
+                    elif "password" in name.lower():
+                        # In case Password field also exists in the page, which is for "AD Password + OTP" Keycloak flow
+                        pw = maskpass.askpass(prompt="Enter Password: ", mask="*")
+                        payload[name] = pw
+                    elif "sas_response" in name:
+                        # In case using STA and page is redirected for anx authentication request page
+                        authentication_type = 'OTP'
 
-                    if authentication_type == 'GRID':
-                        password = complete_grid_login(grid_image.get('src'))
+                        grid_image = soup.find(id='GRIDSUREImage')
+                        if grid_image:
+                            if OCR.init():
+                                authentication_type = 'GRID'
+                            else:
+                                print(f'\n{BColors.FAIL}A grid image was detected on the page but could not be rendered due to missing dependencies.{BColors.ENDC}')
 
-                    elif authentication_type != 'OTP':
-                        password = maskpass.askpass(prompt="\nEnter Password: ", mask="*")
+                        for inputtag in login_form.find_all(re.compile('(label)')):
+                            # Solving for Policy in STA with "AD Password + OTP"
+                            if 'data-i18n' in inputtag.attrs and inputtag.attrs['data-i18n'] == 'ad-password-challenge':
+                                authentication_type = 'AD Password'
 
+                        if authentication_type == 'GRID':
+                            password = complete_grid_login(grid_image.get('src'))
+
+                        elif authentication_type != 'OTP':
+                            password = maskpass.askpass(prompt='\n' + get_i18n_text('ad-password-challenge') + ': ', mask="*")
+
+                        else:
+                            password = input('\n' + get_i18n_text('passcode') + ': ')
+                            print('')
+
+                        payload[name] = password
                     else:
-                        print("\nEnter OTP:", end=' ')
-                        password = input()
-                        print('')
-
-                    payload[name] = password
-                else:
-                    # Simply populate the parameter with the existing value (picks up hidden fields in the login form)
-                    payload[name] = value
+                        # Simply populate the parameter with the existing value (picks up hidden fields in the login form)
+                        payload[name] = value
 
 
             # note: wasn't required but strange to have kvp '':''
@@ -1293,7 +1342,7 @@ def main():
     # otherwise just proceed
     if len(awsroles) > 1:
         while True:
-            i = 0
+            i = 1
             print(f"{BColors.OKGREEN}Please choose the role you would like to assume:{BColors.WHITE}\n")
             for awsrole in awsroles:
                 print(spacing + '[', i, ']: ', awsrole.split(',')[0])
@@ -1303,13 +1352,13 @@ def main():
             try:
                 selection = int(selectedroleindex)
             except ValueError:
-                selection = -1
+                selection = 0
 
-            if selection > (len(awsroles) - 1) or selection < 0:
+            if selection > len(awsroles) or selection < 1:
                 print('You selected an invalid role index, please try again')
             else:
-                role_arn = awsroles[selection].split(',')[0]
-                principal_arn = awsroles[selection].split(',')[1]
+                role_arn = awsroles[selection - 1].split(',')[0]
+                principal_arn = awsroles[selection - 1].split(',')[1]
                 break
 
     elif len(awsroles) > 0:
